@@ -8,6 +8,7 @@
 #include <cmath>
 
 #include "App.h"
+#include "resource.h"
 
 using namespace Gdiplus;
 
@@ -62,6 +63,7 @@ public:
     HRESULT STDMETHODCALLTYPE DragEnter(IDataObject* data, DWORD, POINTL pt, DWORD* effect) override {
         FORMATETC fmt{CF_HDROP, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL};
         hasFiles_ = data && data->QueryGetData(&fmt) == S_OK;
+        owner_->noteDragEntered();  // đang kéo vào popup => không tự đóng khi thả chuột
         return DragOver(0, pt, effect);
     }
     HRESULT STDMETHODCALLTYPE DragOver(DWORD, POINTL pt, DWORD* effect) override {
@@ -124,6 +126,7 @@ bool PopupWindow::create(HINSTANCE instance) {
     wc.hInstance = instance;
     wc.hCursor = ::LoadCursorW(nullptr, IDC_ARROW);
     wc.lpszClassName = kPopupClass;
+    wc.hIcon = ::LoadIconW(instance, MAKEINTRESOURCEW(IDI_APP_ICON));
     ::RegisterClassExW(&wc);
 
     hwnd_ = ::CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, kPopupClass, L"FileDrop", WS_POPUP, 0, 0, 340, 420,
@@ -144,16 +147,55 @@ void PopupWindow::show() {
     reposition();
     ::ShowWindow(hwnd_, SW_SHOW);
     ::SetForegroundWindow(hwnd_);
+    mouseWasDown_ = (::GetAsyncKeyState(VK_LBUTTON) & 0x8000) || (::GetAsyncKeyState(VK_RBUTTON) & 0x8000);
+    pressStartedInside_ = true;
     ::SetTimer(hwnd_, kAnimTimer, 33, nullptr);
     ::InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 void PopupWindow::hide() {
+    if (!visible()) return;
     ::KillTimer(hwnd_, kAnimTimer);
     ::ShowWindow(hwnd_, SW_HIDE);
+    hiddenAt_ = ::GetTickCount64();
 }
 
-void PopupWindow::toggle() { visible() ? hide() : show(); }
+void PopupWindow::toggle() {
+    if (visible()) {
+        hide();
+    } else if (::GetTickCount64() - hiddenAt_ > 400) {
+        // Popup vừa tự đóng vì chính cú bấm vào icon khay này => không mở lại.
+        show();
+    }
+}
+
+bool PopupWindow::pointOverSelfOrTray(POINT pt) const {
+    RECT r{};
+    if (::GetWindowRect(hwnd_, &r) && ::PtInRect(&r, pt)) return true;
+    NOTIFYICONIDENTIFIER id{sizeof(id)};
+    id.hWnd = app_.messageWindow();
+    id.uID = kTrayIconId;
+    return SUCCEEDED(::Shell_NotifyIconGetRect(&id, &r)) && ::PtInRect(&r, pt);
+}
+
+// Popup có thể không được active (người dùng vừa bấm sang Explorer để kéo file), nên không dựa vào
+// WM_ACTIVATE mà theo dõi trạng thái chuột toàn hệ thống:
+//   - nhấn chuột ngoài popup/icon khay rồi thả ra mà KHÔNG kéo file vào popup => đóng;
+//   - nhấn ở Explorer rồi kéo file vào popup => giữ nguyên để thả.
+void PopupWindow::pollOutsideClick() {
+    const bool down = (::GetAsyncKeyState(VK_LBUTTON) & 0x8000) || (::GetAsyncKeyState(VK_RBUTTON) & 0x8000);
+    POINT pt{};
+    ::GetCursorPos(&pt);
+    if (down && !mouseWasDown_) {
+        pressStartedInside_ = pointOverSelfOrTray(pt);
+        dragEnteredDuringPress_ = false;
+    } else if (!down && mouseWasDown_) {
+        RECT r{};
+        bool releasedOverSelf = ::GetWindowRect(hwnd_, &r) && ::PtInRect(&r, pt);
+        if (!pressStartedInside_ && !dragEnteredDuringPress_ && !releasedOverSelf) hide();
+    }
+    mouseWasDown_ = down;
+}
 
 void PopupWindow::invalidate() {
     if (!visible()) return;
@@ -541,7 +583,17 @@ LRESULT PopupWindow::handle(UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_ERASEBKGND:
             return 1;
         case WM_TIMER:
-            if (wParam == kAnimTimer && animating()) ::InvalidateRect(hwnd_, nullptr, FALSE);
+            if (wParam == kAnimTimer) {
+                pollOutsideClick();
+                if (visible() && animating()) ::InvalidateRect(hwnd_, nullptr, FALSE);
+            }
+            return 0;
+        case WM_ACTIVATE:
+            // Mất focus mà không do chuột (Alt+Tab, phím Windows...) => đóng.
+            if (LOWORD(wParam) == WA_INACTIVE && !(::GetAsyncKeyState(VK_LBUTTON) & 0x8000) &&
+                !(::GetAsyncKeyState(VK_RBUTTON) & 0x8000)) {
+                hide();
+            }
             return 0;
         case WM_MOUSEMOVE: {
             if (!trackingMouse_) {

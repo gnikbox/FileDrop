@@ -64,7 +64,10 @@
   - `FileDropService` (foreground, dataSync) giữ engine + MulticastLock; tự dừng khi tắt "Nhận file khi chạy nền" và đóng app.
   - File nhận về lưu tạm `filesDir/incoming` rồi chuyển vào `Download/FileDrop` qua MediaStore.
   - Hỏi nhận file: hộp thoại trong app + thông báo có nút Chấp nhận/Từ chối.
-- Chưa làm: iOS (share extension), icon app desktop (.icns/.ico), ký số/notarize, keystore phát hành Android.
+- Icon app: vẽ bằng `tools/icon/render_icon.swift` (PNG nhiều cỡ) → `tools/icon/make_ico.py` ra `Windows/FileDrop.ico`
+  (icon exe = icon tray lúc rảnh) và `iconutil` ra `macOS/FileDrop/Resources/AppIcon.icns`. Menu bar macOS vẫn dùng SF Symbol đơn sắc.
+- Popup Windows tự đóng khi bấm ra ngoài / Alt+Tab / Esc, nhưng giữ nguyên khi đang kéo file từ Explorer vào (theo dõi chuột trong `pollOutsideClick`).
+- Chưa làm: iOS (share extension), ký số/notarize, keystore phát hành Android.
 
 ## Lưu ý
 - Mỗi lần lập trình, viết mã song song cho 2 nền tảng macOS, Windows.

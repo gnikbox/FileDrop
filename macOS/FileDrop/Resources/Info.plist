@@ -6,6 +6,8 @@
     <string>vi</string>
     <key>CFBundleExecutable</key>
     <string>FileDrop</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>com.filedrop.macos</string>
     <key>CFBundleInfoDictionaryVersion</key>

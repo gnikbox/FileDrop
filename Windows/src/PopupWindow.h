@@ -78,6 +78,17 @@ private:
     bool trackingMouse_ = false;
     Hit hover_ = Hit::None;
     int hoverTile_ = -1;
+
+    // Tự đóng khi bấm ra ngoài (xem pollOutsideClick).
+    void pollOutsideClick();
+    bool pointOverSelfOrTray(POINT pt) const;
+    bool mouseWasDown_ = false;
+    bool pressStartedInside_ = false;
+    bool dragEnteredDuringPress_ = false;
+    ULONGLONG hiddenAt_ = 0;
+
+public:
+    void noteDragEntered() { dragEnteredDuringPress_ = true; }
 };
 
 }  // namespace filedrop::win

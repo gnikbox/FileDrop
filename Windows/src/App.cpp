@@ -10,6 +10,7 @@
 #include "Drawing.h"
 #include "PopupWindow.h"
 #include "Settings.h"
+#include "resource.h"
 #include "filedrop/util.h"
 
 namespace filedrop::win {
@@ -77,6 +78,7 @@ int App::run(HINSTANCE instance, bool /*autostart*/) {
     wc.lpfnWndProc = &App::messageProc;
     wc.hInstance = instance;
     wc.lpszClassName = kMessageWindowClass;
+    wc.hIcon = ::LoadIconW(instance, MAKEINTRESOURCEW(IDI_APP_ICON));
     ::RegisterClassExW(&wc);
     // Cửa sổ ẩn (không dùng HWND_MESSAGE để nhận được broadcast "TaskbarCreated").
     auto fatal = [](const wchar_t* what) {
@@ -447,7 +449,12 @@ void App::updateTrayIcon() {
     trayProgress_ = progress;
 
     HICON old = trayIcon_;
-    trayIcon_ = createTrayIcon(::GetSystemMetrics(SM_CXSMICON), taskbarUsesDarkTheme(), progress);
+    trayIcon_ = nullptr;
+    if (progress < 0) {
+        // Lúc rảnh: dùng đúng icon của app (đúng kích thước theo DPI).
+        ::LoadIconMetric(instance_, MAKEINTRESOURCEW(IDI_APP_ICON), LIM_SMALL, &trayIcon_);
+    }
+    if (!trayIcon_) trayIcon_ = createTrayIcon(::GetSystemMetrics(SM_CXSMICON), taskbarUsesDarkTheme(), progress);
     NOTIFYICONDATAW nid{sizeof(nid)};
     nid.hWnd = msgWnd_;
     nid.uID = kTrayIconId;
