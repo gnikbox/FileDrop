@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Biểu tượng sóng phát (giống icon menu bar macOS) trên nền xanh. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:translateX="30" android:translateY="30">
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M24,20.5a3.5,3.5 0,1 0,0.01 0z" />
+        <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="3.2" android:strokeLineCap="round"
+            android:pathData="M16.2,31.8a11,11 0,0 1,0 -15.6M31.8,16.2a11,11 0,0 1,0 15.6" />
+        <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="3.2" android:strokeLineCap="round"
+            android:pathData="M10.6,37.4a18.9,18.9 0,0 1,0 -26.8M37.4,10.6a18.9,18.9 0,0 1,0 26.8" />
+    </group>
+</vector>
