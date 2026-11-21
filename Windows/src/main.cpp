@@ -19,7 +19,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR cmdLine, int) {
     }
 
     ::SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-    if (FAILED(::OleInitialize(nullptr))) return 1;
+    if (FAILED(::OleInitialize(nullptr))) {
+        ::MessageBoxW(nullptr, L"Không khởi tạo được OLE (cần cho kéo thả file).", L"FileDrop", MB_OK | MB_ICONERROR);
+        return 1;
+    }
 
     Gdiplus::GdiplusStartupInput gdiplusInput;
     ULONG_PTR gdiplusToken = 0;

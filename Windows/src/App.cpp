@@ -79,16 +79,23 @@ int App::run(HINSTANCE instance, bool /*autostart*/) {
     wc.lpszClassName = kMessageWindowClass;
     ::RegisterClassExW(&wc);
     // Cửa sổ ẩn (không dùng HWND_MESSAGE để nhận được broadcast "TaskbarCreated").
-    msgWnd_ = ::CreateWindowExW(0, kMessageWindowClass, L"FileDrop", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr,
-                                instance, this);
-    if (!msgWnd_) return 1;
+    auto fatal = [](const wchar_t* what) {
+        std::wstring text = std::wstring(what) + L"\n\nMã lỗi Windows: " + std::to_wstring(::GetLastError());
+        ::MessageBoxW(nullptr, text.c_str(), L"FileDrop không khởi động được", MB_OK | MB_ICONERROR);
+        return 1;
+    };
+
+    if (::CreateWindowExW(0, kMessageWindowClass, L"FileDrop", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, instance,
+                          this) == nullptr) {
+        return fatal(L"Không tạo được cửa sổ nền.");
+    }
     taskbarCreatedMsg_ = ::RegisterWindowMessageW(L"TaskbarCreated");
 
     autostart_ = isAutostartEnabled();
     selectedPeerId_ = toUtf8(readSetting(L"SelectedPeerId"));
 
     popup_ = std::make_unique<PopupWindow>(*this);
-    if (!popup_->create(instance)) return 1;
+    if (!popup_->create(instance)) return fatal(L"Không tạo được cửa sổ popup.");
 
     addTrayIcon();
     startEngine();
@@ -147,7 +154,11 @@ void App::post(std::function<void()> fn) {
 LRESULT CALLBACK App::messageProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (msg == WM_NCCREATE) {
         auto* cs = reinterpret_cast<CREATESTRUCTW*>(lParam);
-        ::SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(cs->lpCreateParams));
+        auto* app = static_cast<App*>(cs->lpCreateParams);
+        // Gán HWND ngay tại đây: handleMessage() gọi DefWindowProcW(msgWnd_, ...) cho các message
+        // gửi tới trong lúc CreateWindowExW chưa trả về (WM_NCCREATE phải trả TRUE).
+        app->msgWnd_ = hwnd;
+        ::SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(app));
     }
     auto* self = reinterpret_cast<App*>(::GetWindowLongPtrW(hwnd, GWLP_USERDATA));
     if (self) return self->handleMessage(msg, wParam, lParam);
