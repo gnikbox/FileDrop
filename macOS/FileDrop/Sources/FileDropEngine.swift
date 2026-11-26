@@ -45,6 +45,23 @@ struct TransferDescriptor {
     }
 }
 
+enum WebClientState: Int32 { case pending = 0, connected = 1, declined = 2, disconnected = 3 }
+
+/// Máy khác đang dùng trình duyệt gửi file tới "Máy chủ nhận file".
+struct WebClientInfo: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let ip: String
+    let state: WebClientState
+
+    init(_ c: fd_web_client) {
+        id = String(cString: c.id)
+        name = String(cString: c.name)
+        ip = String(cString: c.ip)
+        state = WebClientState(rawValue: c.state) ?? .disconnected
+    }
+}
+
 struct TransferOutcome {
     let status: TransferStatus
     let message: String
@@ -59,6 +76,7 @@ protocol FileDropEngineDelegate: AnyObject {
     func engine(transfer info: TransferDescriptor, phase: TransferPhase)
     func engine(transfer info: TransferDescriptor, progress done: UInt64, total: UInt64)
     func engine(transfer info: TransferDescriptor, finished outcome: TransferOutcome)
+    func engine(webClientChanged client: WebClientInfo)
 }
 
 /// Bọc fd_engine. Delegate luôn được gọi trên main thread.
@@ -104,6 +122,11 @@ final class FileDropEngine {
                                           saveDir: String(cString: r.save_dir),
                                           firstSavedPath: String(cString: r.first_saved_path))
             FileDropEngine.from(ctx).onMain { $0.delegate?.engine(transfer: t, finished: outcome) }
+        }
+        cb.on_web_client_changed = { ctx, client in
+            guard let ctx, let client else { return }
+            let c = WebClientInfo(client.pointee)
+            FileDropEngine.from(ctx).onMain { $0.delegate?.engine(webClientChanged: c) }
         }
         handle = fd_engine_create(deviceId, deviceName, "macos", downloadDir, cb)
     }
@@ -157,4 +180,56 @@ final class FileDropEngine {
     }
 
     func cancel(_ transferId: String) { fd_engine_cancel(handle, transferId) }
+
+    /// Tạm ẩn: máy khác không thấy máy này, mọi yêu cầu gửi file tới đều tự động bị từ chối.
+    var isHidden: Bool {
+        get { fd_engine_is_hidden(handle) != 0 }
+        set { fd_engine_set_hidden(handle, newValue ? 1 : 0) }
+    }
+
+    // MARK: Máy chủ nhận file qua web
+
+    /// Bật HTTP server trên cổng ngẫu nhiên, trả về địa chỉ để máy khác mở bằng trình duyệt.
+    func startWebServer() throws -> String {
+        var url = [CChar](repeating: 0, count: 256)
+        var err = [CChar](repeating: 0, count: 512)
+        if fd_engine_web_start(handle, &url, url.count, &err, err.count) == 0 {
+            throw NSError(domain: "FileDrop", code: 3,
+                          userInfo: [NSLocalizedDescriptionKey: String(cString: err)])
+        }
+        return String(cString: url)
+    }
+
+    func stopWebServer() { fd_engine_web_stop(handle) }
+
+    @discardableResult
+    func respondWebClient(_ clientId: String, accept: Bool) -> Bool {
+        fd_engine_web_respond(handle, clientId, accept ? 1 : 0) != 0
+    }
+
+    func disconnectWebClient(_ clientId: String) { fd_engine_web_disconnect(handle, clientId) }
+
+    /// Bản cài FileDrop cho máy khách web tải về; packageDirs được quét thêm mỗi lần máy khách hỏi.
+    func setWebDownloads(_ items: [WebDownloadItem], packageDirs: [String]) {
+        var cStrings: [UnsafeMutablePointer<CChar>] = []
+        func dup(_ s: String) -> UnsafePointer<CChar> {
+            let p = strdup(s)!
+            cStrings.append(p)
+            return UnsafePointer(p)
+        }
+        defer { cStrings.forEach { free($0) } }
+        let cItems = items.map { fd_web_download(platform: dup($0.platform), path: dup($0.path), file_name: dup($0.fileName)) }
+        let cDirs: [UnsafePointer<CChar>?] = packageDirs.map { dup($0) }
+        cItems.withUnsafeBufferPointer { ib in
+            cDirs.withUnsafeBufferPointer { db in
+                fd_engine_web_set_downloads(handle, ib.baseAddress, Int32(ib.count), db.baseAddress, Int32(db.count))
+            }
+        }
+    }
+}
+
+struct WebDownloadItem {
+    let platform: String
+    let path: String
+    let fileName: String
 }

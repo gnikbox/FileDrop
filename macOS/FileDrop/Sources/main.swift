@@ -40,6 +40,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         model.onTransferProgressChanged = { [weak self] progress in
             self?.statusItem.button?.image = progress.map { StatusIcon.progress($0) } ?? StatusIcon.idle()
         }
+        // Đang tạm ẩn => icon trên thanh menu mờ đi.
+        model.onHiddenChanged = { [weak self] hidden in
+            self?.statusItem.button?.appearsDisabled = hidden
+            self?.statusItem.button?.toolTip = hidden ? "FileDrop (đang tạm ẩn)" : "FileDrop"
+        }
+        model.onHiddenChanged?(model.isHidden)
         model.start()
     }
 
@@ -80,7 +86,7 @@ final class StatusItemDropView: NSView {
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        registerForDraggedTypes([.fileURL])
+        registerForDraggedTypes(DropReader.draggedTypes)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) không dùng") }
@@ -97,10 +103,10 @@ final class StatusItemDropView: NSView {
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        let urls = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self],
-                                                         options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
-        guard acceptsDrop, !urls.isEmpty else { return false }
-        onDrop?(urls)
+        guard acceptsDrop, DropReader.canRead(sender.draggingPasteboard) else { return false }
+        DropReader.read(sender.draggingPasteboard) { [weak self] urls in
+            if !urls.isEmpty { self?.onDrop?(urls) }
+        }
         return true
     }
 }

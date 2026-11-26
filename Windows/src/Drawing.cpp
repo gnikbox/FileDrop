@@ -2,6 +2,8 @@
 
 #include "Settings.h"
 
+#include <cstdint>
+
 using namespace Gdiplus;
 
 namespace filedrop::win {
@@ -59,6 +61,40 @@ void addRoundRect(GraphicsPath& path, const RectF& r, float radius) {
     path.AddArc(r.X + r.Width - d, r.Y + r.Height - d, d, d, 0, 90);
     path.AddArc(r.X, r.Y + r.Height - d, d, d, 90, 90);
     path.CloseFigure();
+}
+
+HICON createDimmedIcon(HICON source, double alphaFactor) {
+    ICONINFO info{};
+    if (!source || !::GetIconInfo(source, &info)) return nullptr;
+    HICON result = nullptr;
+    BITMAP bm{};
+    if (info.hbmColor && ::GetObjectW(info.hbmColor, sizeof(bm), &bm) && bm.bmBitsPixel == 32) {
+        const int w = bm.bmWidth, h = bm.bmHeight;
+        BITMAPINFO bi{};
+        bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        bi.bmiHeader.biWidth = w;
+        bi.bmiHeader.biHeight = -h;
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        bi.bmiHeader.biCompression = BI_RGB;
+        HDC dc = ::GetDC(nullptr);
+        void* bits = nullptr;
+        HBITMAP color = ::CreateDIBSection(dc, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+        if (color && ::GetDIBits(dc, info.hbmColor, 0, static_cast<UINT>(h), bits, &bi, DIB_RGB_COLORS)) {
+            auto* px = static_cast<uint32_t*>(bits);
+            for (int i = 0; i < w * h; ++i) {
+                uint32_t a = static_cast<uint32_t>(((px[i] >> 24) & 0xFF) * alphaFactor);
+                px[i] = (px[i] & 0x00FFFFFF) | (a << 24);  // icon dùng alpha thẳng (không nhân trước)
+            }
+            ICONINFO dimmed{TRUE, 0, 0, info.hbmMask, color};
+            result = ::CreateIconIndirect(&dimmed);
+        }
+        if (color) ::DeleteObject(color);
+        ::ReleaseDC(nullptr, dc);
+    }
+    if (info.hbmColor) ::DeleteObject(info.hbmColor);
+    if (info.hbmMask) ::DeleteObject(info.hbmMask);
+    return result;
 }
 
 HICON createTrayIcon(int size, bool darkTaskbar, double progress) {

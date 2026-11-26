@@ -12,6 +12,7 @@ import android.net.Uri
 import androidx.core.app.NotificationCompat
 import com.filedrop.android.core.IncomingRequest
 import com.filedrop.android.core.Transfer
+import com.filedrop.android.core.WebClient
 
 /** Thông báo: trạng thái service, hỏi nhận file (Chấp nhận/Từ chối), kết quả gửi/nhận. */
 object Notifications {
@@ -22,6 +23,7 @@ object Notifications {
     private const val ACTION_ACCEPT = "com.filedrop.android.ACCEPT"
     private const val ACTION_DECLINE = "com.filedrop.android.DECLINE"
     private const val EXTRA_ID = "transferId"
+    private const val EXTRA_WEB = "web"
 
     fun createChannels(context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java)
@@ -44,7 +46,12 @@ object Notifications {
             .setOnlyAlertOnce(true)
             .setSilent(true)
         if (transfer == null) {
-            b.setContentTitle("FileDrop").setContentText("Sẵn sàng nhận file với tên ${FileDrop.deviceName}")
+            val web = FileDrop.webUrl.value
+            b.setContentTitle("FileDrop").setContentText(when {
+                web != null -> "Máy chủ nhận file: $web"
+                FileDrop.hidden.value -> "Đang tạm ẩn — không nhận file"
+                else -> "Sẵn sàng nhận file với tên ${FileDrop.deviceName}"
+            })
         } else {
             b.setContentTitle(transfer.title).setContentText(transfer.items)
             if (transfer.phase == com.filedrop.android.core.Phase.TRANSFERRING) {
@@ -77,6 +84,27 @@ object Notifications {
         notify(context, request.id.hashCode(), n)
     }
 
+    fun showWebRequest(context: Context, client: WebClient) {
+        fun action(name: String) = PendingIntent.getBroadcast(
+            context, client.id.hashCode() + name.hashCode(),
+            Intent(context, RequestActionReceiver::class.java).setAction(name)
+                .putExtra(EXTRA_ID, client.id).putExtra(EXTRA_WEB, true),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+
+        val n = NotificationCompat.Builder(context, CHANNEL_REQUEST)
+            .setSmallIcon(R.drawable.ic_stat_filedrop)
+            .setContentTitle("Cho phép “${client.name}” kết nối?")
+            .setContentText("Máy ${client.ip} muốn gửi file cho bạn qua trình duyệt web.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setContentIntent(openApp(context))
+            .setAutoCancel(true)
+            .addAction(0, "Chấp nhận", action(ACTION_ACCEPT))
+            .addAction(0, "Từ chối", action(ACTION_DECLINE))
+            .build()
+        notify(context, client.id.hashCode(), n)
+    }
+
     fun cancelRequest(context: Context, id: String) {
         context.getSystemService(NotificationManager::class.java).cancel(id.hashCode())
     }
@@ -107,7 +135,9 @@ object Notifications {
     class RequestActionReceiver : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             val id = intent.getStringExtra(EXTRA_ID) ?: return
-            FileDrop.respond(id, accept = intent.action == ACTION_ACCEPT)
+            val accept = intent.action == ACTION_ACCEPT
+            if (intent.getBooleanExtra(EXTRA_WEB, false)) FileDrop.respondWeb(id, accept)
+            else FileDrop.respond(id, accept)
         }
     }
 }

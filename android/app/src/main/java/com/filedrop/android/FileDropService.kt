@@ -54,8 +54,18 @@ class FileDropService : Service() {
             }
             .launchIn(scope)
 
+        // Bật/tắt tạm ẩn hoặc máy chủ web => cập nhật dòng trạng thái của thông báo.
+        combine(FileDrop.hidden, FileDrop.webUrl) { h, w -> h to w }
+            .onEach {
+                val t = FileDrop.transfers.value.values.maxByOrNull { it.startedAt }
+                ContextCompat.getSystemService(this, android.app.NotificationManager::class.java)
+                    ?.notify(Notifications.STATUS_ID, Notifications.status(this, t))
+            }
+            .launchIn(scope)
+
         // Dừng service khi không còn cần (trễ vài giây để chuyển màn hình không làm tắt engine).
-        combine(FileDrop.receiveInBackground, FileDrop.visibleScreens, FileDrop.transfers, FileDrop.incoming) { _, _, _, _ ->
+        combine(FileDrop.receiveInBackground, FileDrop.visibleScreens, FileDrop.transfers, FileDrop.incoming,
+                FileDrop.webUrl) { _, _, _, _, _ ->
             FileDrop.serviceNeeded()
         }
             .debounce(3000)

@@ -5,6 +5,7 @@ add_executable(FileDrop WIN32
     src/App.cpp
     src/PopupWindow.cpp
     src/Drawing.cpp
+    src/DropData.cpp
     src/Settings.cpp
     FileDrop.rc
 )

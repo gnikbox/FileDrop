@@ -41,6 +41,12 @@ struct UiTransfer {
     std::wstring title() const;
 };
 
+struct UiWebClient {
+    std::string id;
+    std::wstring name;
+    std::wstring ip;
+};
+
 struct UiNote {
     std::wstring text;
     bool isError = false;
@@ -63,8 +69,12 @@ public:
     bool isSearching() const { return searching_; }
     const std::wstring& deviceName() const { return deviceName_; }
     bool autostartEnabled() const { return autostart_; }
+    bool hidden() const { return hidden_; }
     bool canDrop() const { return selectedPeer() != nullptr; }
     HWND messageWindow() const { return msgWnd_; }
+    // Máy chủ nhận file qua web: địa chỉ (rỗng = đang tắt) và các máy đã kết nối bằng trình duyệt.
+    const std::wstring& webServerUrl() const { return webUrl_; }
+    const std::vector<UiWebClient>& webClients() const { return webClients_; }
 
     // --- Hành động từ UI ---
     void refresh();
@@ -72,6 +82,12 @@ public:
     void sendFiles(const std::vector<std::wstring>& paths);
     void cancel(const std::string& transferId);
     void toggleAutostart();
+    void toggleHidden();
+    void toggleWebServer();
+    void copyWebServerUrl();
+    void configureWebDownloads();
+    void openWebServerUrl();
+    void disconnectWebClient(const std::string& clientId);
     void quit();
 
 private:
@@ -88,8 +104,11 @@ private:
     void onPhase(const TransferInfo& info, TransferPhase phase);
     void onProgress(const TransferInfo& info, uint64_t done, uint64_t total);
     void onFinished(const TransferInfo& info, const TransferResult& result);
+    void onWebClientChanged(const WebClient& client);
 
     void presentNextIncoming();
+    // Hộp thoại Chấp nhận/Từ chối. Trả về true nếu chấp nhận.
+    bool askAccept(const std::wstring& title, const std::wstring& content);
     void showNote(const std::wstring& text, bool isError, bool sticky = false);
     void notify(const std::wstring& title, const std::wstring& body, const std::wstring& revealPath = {});
     void addTrayIcon();
@@ -111,9 +130,13 @@ private:
     std::map<std::string, UiTransfer> transfers_;
     std::optional<UiNote> note_;
     std::deque<TransferInfo> incomingQueue_;
+    std::deque<WebClient> webRequests_;
     bool presentingIncoming_ = false;
+    std::wstring webUrl_;
+    std::vector<UiWebClient> webClients_;
     bool searching_ = false;
     bool autostart_ = false;
+    bool hidden_ = false;  // tạm ẩn: không hiện với máy khác, không nhận file
     std::wstring revealPath_;
 };
 

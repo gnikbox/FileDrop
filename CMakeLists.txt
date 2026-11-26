@@ -9,6 +9,9 @@ if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "" FORCE)
 endif()
 
+# MSVC: runtime tĩnh để FileDrop.exe chạy độc lập (máy chủ web cho máy khách tải thẳng file exe).
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
 option(FILEDROP_BUILD_TOOLS "Build fdcli và bộ kiểm thử lõi" ON)
 
 enable_testing()

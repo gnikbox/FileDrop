@@ -36,7 +36,14 @@ struct ContentView: View {
                 .foregroundStyle(Color.accentColor)
             VStack(alignment: .leading, spacing: 0) {
                 Text("FileDrop").font(.system(size: 15, weight: .bold))
-                Text(model.deviceName).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                if model.isHidden {
+                    Label("Đang tạm ẩn · không nhận file", systemImage: "eye.slash")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Color.orange)
+                        .lineLimit(1)
+                } else {
+                    Text(model.deviceName).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                }
             }
             Spacer()
             Button(action: model.refresh) {
@@ -102,11 +109,10 @@ struct ContentView: View {
             }
         }
         .frame(height: 130)
-        .dropDestination(for: URL.self) { urls, _ in
-            guard model.canDrop else { return false }
-            model.send(urls: urls)
-            return true
-        } isTargeted: { isDropTargeted = $0 && model.canDrop }
+        // Nhận cả file thật, file promise (ảnh chụp màn hình ở góc dưới phải, ảnh từ Photos...) và dữ liệu ảnh.
+        .background(FileDropTarget(canDrop: { model.canDrop },
+                                   onTargeted: { isDropTargeted = $0 },
+                                   onDrop: { model.send(urls: $0) }))
     }
 
     private var dropSubtitle: String {
@@ -149,14 +155,88 @@ struct ContentView: View {
     }
 
     private var footer: some View {
-        HStack {
-            Toggle("Khởi động cùng macOS", isOn: $model.launchAtLogin)
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle("Máy chủ nhận file qua trình duyệt", isOn: Binding(
+                get: { model.webServerURL != nil },
+                set: { model.setWebServer($0) }))
                 .toggleStyle(.checkbox)
                 .font(.system(size: 12))
-            Spacer()
-            Button("Thoát", action: onQuit)
+                .help("Máy khác cùng mạng không cần cài app: mở địa chỉ hiện ra bằng trình duyệt để gửi file cho bạn")
+            if let url = model.webServerURL {
+                WebServerPanel(url: url, clients: model.webClients,
+                               onCopy: model.copyWebServerURL, onOpen: model.openWebServerURL,
+                               onDisconnect: model.disconnectWebClient)
+            }
+            Toggle("Tạm ẩn — không nhận file", isOn: $model.isHidden)
+                .toggleStyle(.checkbox)
                 .font(.system(size: 12))
+                .help("Máy khác sẽ không thấy máy này; bạn vẫn gửi file đi được")
+            HStack {
+                Toggle("Khởi động cùng macOS", isOn: $model.launchAtLogin)
+                    .toggleStyle(.checkbox)
+                    .font(.system(size: 12))
+                Spacer()
+                Button("Thoát", action: onQuit)
+                    .font(.system(size: 12))
+            }
         }
+    }
+}
+
+/// Khung "Máy chủ nhận file": địa chỉ web + danh sách máy đang kết nối qua trình duyệt.
+struct WebServerPanel: View {
+    let url: String
+    let clients: [WebClientInfo]
+    var onCopy: () -> Void
+    var onOpen: () -> Void
+    var onDisconnect: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "globe").foregroundStyle(Color.accentColor)
+                Text(url)
+                    .font(.system(size: 12, weight: .semibold).monospaced())
+                    .textSelection(.enabled)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 4)
+                iconButton("doc.on.doc", help: "Chép địa chỉ", action: onCopy)
+                iconButton("safari", help: "Mở trong trình duyệt", action: onOpen)
+            }
+            if clients.isEmpty {
+                Text("Mở địa chỉ này trên trình duyệt của máy khác cùng mạng Wi-Fi. Bạn sẽ được hỏi trước khi máy đó kết nối.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ForEach(clients) { c in
+                    HStack(spacing: 6) {
+                        Circle().fill(Color.green).frame(width: 7, height: 7)
+                        Text(c.name).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                        Text(c.ip).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                        Spacer(minLength: 4)
+                        Button("Ngắt") { onDisconnect(c.id) }
+                            .buttonStyle(.link)
+                            .font(.system(size: 11))
+                    }
+                }
+            }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.accentColor.opacity(0.08)))
+    }
+
+    private func iconButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .medium))
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.07)))
+        .help(help)
     }
 }
 

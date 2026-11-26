@@ -34,6 +34,9 @@ import androidx.compose.material.icons.rounded.Laptop
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.PhoneIphone
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.WifiFind
 import androidx.compose.material.icons.rounded.WifiTethering
 import androidx.compose.material3.CircularProgressIndicator
@@ -82,13 +85,15 @@ fun FileDropTheme(content: @Composable () -> Unit) {
 private val secondaryText @Composable get() = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
 
 @Composable
-fun Header(title: String, subtitle: String, onRefresh: () -> Unit) {
+fun Header(title: String, subtitle: String, onRefresh: () -> Unit, warning: Boolean = false) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Rounded.WifiTethering, contentDescription = null, tint = Accent, modifier = Modifier.size(24.dp))
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
             Text(title, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-            Text(subtitle, fontSize = 12.sp, color = secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                 color = if (warning) Color(0xFFFF9500) else secondaryText,
+                 fontWeight = if (warning) FontWeight.SemiBold else FontWeight.Normal)
         }
         FilledTonalIconButton(onClick = onRefresh, modifier = Modifier.size(36.dp)) {
             Icon(Icons.Rounded.Refresh, contentDescription = "Tìm lại thiết bị", modifier = Modifier.size(18.dp))
@@ -260,6 +265,60 @@ fun StatusLine(note: Note?) {
                          tint = if (it.isError) Color(0xFFFF9500) else Color(0xFF34C759), modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(it.text, fontSize = 12.sp, maxLines = 2)
+                }
+            }
+        }
+    }
+}
+
+/** Khung "Máy chủ nhận file": địa chỉ web + các máy đang kết nối qua trình duyệt. */
+@Composable
+fun WebServerPanel(
+    url: String,
+    clients: List<com.filedrop.android.core.WebClient>,
+    onCopy: () -> Unit,
+    onShare: () -> Unit,
+    onDisconnect: (String) -> Unit,
+) {
+    val accent = MaterialTheme.colorScheme.primary
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(accent.copy(alpha = 0.08f)).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        // Địa chỉ chiếm cả dòng (màn hình dọc hẹp), nút chép/chia sẻ ở dòng dưới.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Language, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+            androidx.compose.foundation.text.selection.SelectionContainer(Modifier.weight(1f)) {
+                Text(url, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                     fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            androidx.compose.material3.FilledTonalButton(onClick = onCopy) {
+                Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Chép địa chỉ", fontSize = 13.sp)
+            }
+            androidx.compose.material3.FilledTonalButton(onClick = onShare) {
+                Icon(Icons.Rounded.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Chia sẻ", fontSize = 13.sp)
+            }
+        }
+        if (clients.isEmpty()) {
+            Text("Mở địa chỉ này trên trình duyệt của máy khác cùng mạng Wi-Fi. Bạn sẽ được hỏi trước khi máy đó kết nối.",
+                 fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+        } else {
+            clients.forEach { c ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(8.dp).clip(RoundedCornerShape(50)).background(Color(0xFF2FB36A)))
+                    Spacer(Modifier.width(8.dp))
+                    Text(c.name, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                    Spacer(Modifier.width(6.dp))
+                    Text(c.ip, fontSize = 12.sp, maxLines = 1, modifier = Modifier.weight(1f),
+                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
+                    TextButton(onClick = { onDisconnect(c.id) }) { Text("Ngắt") }
                 }
             }
         }

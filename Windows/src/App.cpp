@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 #include "Drawing.h"
 #include "PopupWindow.h"
@@ -94,6 +95,7 @@ int App::run(HINSTANCE instance, bool /*autostart*/) {
     taskbarCreatedMsg_ = ::RegisterWindowMessageW(L"TaskbarCreated");
 
     autostart_ = isAutostartEnabled();
+    hidden_ = readSetting(L"Hidden") == L"1";
     selectedPeerId_ = toUtf8(readSetting(L"SelectedPeerId"));
 
     popup_ = std::make_unique<PopupWindow>(*this);
@@ -127,6 +129,7 @@ void App::startEngine() {
     cfg.deviceName = defaultDeviceName();
     cfg.os = "windows";
     cfg.downloadDir = toUtf8(downloadsFolder());
+    cfg.hidden = hidden_;
     deviceName_ = fromUtf8(cfg.deviceName);
 
     EngineCallbacks cb;
@@ -138,6 +141,7 @@ void App::startEngine() {
     cb.onTransferFinished = [this](const TransferInfo& i, const TransferResult& r) {
         post([this, i, r] { onFinished(i, r); });
     };
+    cb.onWebClientChanged = [this](const WebClient& c) { post([this, c] { onWebClientChanged(c); }); };
 
     engine_ = std::make_unique<Engine>(cfg, cb);
     std::string err;
@@ -277,6 +281,80 @@ void App::cancel(const std::string& transferId) {
     if (engine_) engine_->cancel(transferId);
 }
 
+void App::toggleHidden() {
+    hidden_ = !hidden_;
+    writeSetting(L"Hidden", hidden_ ? L"1" : L"0");
+    if (engine_) engine_->setHidden(hidden_);
+    trayProgress_ = -2;  // vẽ lại icon tray (mờ khi ẩn)
+    updateTrayIcon();
+    showNote(hidden_ ? L"Đã tạm ẩn — máy khác không thấy và không gửi file tới được"
+                     : L"Đã hiện lại — sẵn sàng nhận file",
+             false);
+}
+
+void App::toggleWebServer() {
+    if (!engine_) return;
+    if (webUrl_.empty()) {
+        std::string err;
+        if (!engine_->startWebServer(&err)) {
+            showNote(L"Không bật được máy chủ: " + fromUtf8(err), true);
+            return;
+        }
+        webUrl_ = fromUtf8(engine_->webServerUrl());
+        configureWebDownloads();
+        showNote(L"Đã bật máy chủ nhận file — mở địa chỉ trên trình duyệt của máy khác", false);
+    } else {
+        engine_->stopWebServer();
+        webUrl_.clear();
+        webClients_.clear();
+        webRequests_.clear();
+        showNote(L"Đã tắt máy chủ nhận file", false);
+    }
+}
+
+// Trang web gợi ý máy khách tải FileDrop: chính FileDrop.exe (build tĩnh, chạy độc lập)
+// + bản cài khác bỏ trong thư mục "packages" cạnh exe (FileDrop-macOS.zip, FileDrop.apk...).
+void App::configureWebDownloads() {
+    std::wstring exe(MAX_PATH, L'\0');
+    for (;;) {
+        DWORD n = ::GetModuleFileNameW(nullptr, exe.data(), static_cast<DWORD>(exe.size()));
+        if (n == 0) return;
+        if (n < exe.size()) {
+            exe.resize(n);
+            break;
+        }
+        exe.resize(exe.size() * 2);
+    }
+    const size_t slash = exe.find_last_of(L"\\/");
+    const std::wstring dir = slash == std::wstring::npos ? std::wstring() : exe.substr(0, slash);
+    engine_->setWebDownloads({{"windows", toUtf8(exe), "FileDrop-Windows.exe"}}, {toUtf8(dir + L"\\packages")});
+}
+
+void App::copyWebServerUrl() {
+    if (webUrl_.empty() || !::OpenClipboard(msgWnd_)) return;
+    ::EmptyClipboard();
+    const size_t bytes = (webUrl_.size() + 1) * sizeof(wchar_t);
+    if (HGLOBAL mem = ::GlobalAlloc(GMEM_MOVEABLE, bytes)) {
+        if (void* p = ::GlobalLock(mem)) {
+            std::memcpy(p, webUrl_.c_str(), bytes);
+            ::GlobalUnlock(mem);
+            if (!::SetClipboardData(CF_UNICODETEXT, mem)) ::GlobalFree(mem);
+        } else {
+            ::GlobalFree(mem);
+        }
+    }
+    ::CloseClipboard();
+    showNote(L"Đã chép địa chỉ", false);
+}
+
+void App::openWebServerUrl() {
+    if (!webUrl_.empty()) ::ShellExecuteW(nullptr, L"open", webUrl_.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+}
+
+void App::disconnectWebClient(const std::string& clientId) {
+    if (engine_) engine_->disconnectWebClient(clientId);
+}
+
 void App::toggleAutostart() {
     if (setAutostart(!autostart_)) {
         autostart_ = isAutostartEnabled();
@@ -383,19 +461,63 @@ void App::onFinished(const TransferInfo& info, const TransferResult& r) {
     changed();
 }
 
+void App::onWebClientChanged(const WebClient& c) {
+    webClients_.erase(std::remove_if(webClients_.begin(), webClients_.end(),
+                                     [&](const UiWebClient& w) { return w.id == c.id; }),
+                      webClients_.end());
+    webRequests_.erase(std::remove_if(webRequests_.begin(), webRequests_.end(),
+                                      [&](const WebClient& w) { return w.id == c.id; }),
+                       webRequests_.end());
+    if (webUrl_.empty()) return;  // máy chủ đã tắt
+    switch (c.state) {
+        case WebClientState::Pending:
+            webRequests_.push_back(c);
+            presentNextIncoming();
+            break;
+        case WebClientState::Connected:
+            webClients_.push_back({c.id, fromUtf8(c.name), fromUtf8(c.ip)});
+            showNote(fromUtf8(c.name) + L" đã kết nối — có thể gửi file qua trình duyệt", false);
+            break;
+        case WebClientState::Declined:
+        case WebClientState::Disconnected:
+            break;
+    }
+    changed();
+}
+
 // --------------------------------------------------------------------------- Hỏi nhận file
 
 void App::presentNextIncoming() {
-    if (presentingIncoming_ || incomingQueue_.empty()) return;
+    if (presentingIncoming_) return;
+    if (incomingQueue_.empty() && !webRequests_.empty()) {
+        WebClient c = webRequests_.front();
+        webRequests_.pop_front();
+        presentingIncoming_ = true;
+        const std::wstring name = fromUtf8(c.name);
+        const bool accepted = askAccept(
+            L"Cho phép “" + name + L"” kết nối?",
+            L"Máy " + fromUtf8(c.ip) + L" muốn gửi file cho bạn qua trình duyệt web. Nếu đồng ý, máy đó có thể gửi file "
+            L"nhiều lần cho tới khi bạn ngắt kết nối hoặc tắt máy chủ.");
+        if (!engine_->respondWebClient(c.id, accepted) && accepted) showNote(name + L" đã rời đi", true);
+        presentingIncoming_ = false;
+        post([this] { presentNextIncoming(); });
+        return;
+    }
+    if (incomingQueue_.empty()) return;
     TransferInfo info = incomingQueue_.front();
     incomingQueue_.pop_front();
     presentingIncoming_ = true;
 
     const std::wstring peer = fromUtf8(info.peer.name);
-    const std::wstring title = L"Nhận file từ " + peer + L"?";
-    const std::wstring content =
-        peer + L" muốn gửi cho bạn " + itemsDescription(info) + L" (" + formatBytes(info.totalBytes) + L").";
+    const bool accepted = askAccept(L"Nhận file từ " + peer + L"?", peer + L" muốn gửi cho bạn " + itemsDescription(info) +
+                                                                       L" (" + formatBytes(info.totalBytes) + L").");
+    if (!engine_->respond(info.id, accepted) && accepted) showNote(L"Yêu cầu từ " + peer + L" đã hết hạn", true);
 
+    presentingIncoming_ = false;
+    post([this] { presentNextIncoming(); });
+}
+
+bool App::askAccept(const std::wstring& title, const std::wstring& content) {
     TASKDIALOG_BUTTON buttons[] = {{kAcceptButton, L"Chấp nhận"}, {kDeclineButton, L"Từ chối"}};
     TASKDIALOGCONFIG cfg{sizeof(cfg)};
     cfg.hwndParent = nullptr;
@@ -417,11 +539,7 @@ void App::presentNextIncoming() {
                       ? kAcceptButton
                       : kDeclineButton;
     }
-    const bool accepted = pressed == kAcceptButton;
-    if (!engine_->respond(info.id, accepted) && accepted) showNote(L"Yêu cầu từ " + peer + L" đã hết hạn", true);
-
-    presentingIncoming_ = false;
-    post([this] { presentNextIncoming(); });
+    return pressed == kAcceptButton;
 }
 
 // --------------------------------------------------------------------------- Khay hệ thống
@@ -435,7 +553,7 @@ void App::addTrayIcon() {
     nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP | NIF_SHOWTIP;
     nid.uCallbackMessage = WM_APP_TRAY;
     nid.hIcon = trayIcon_;
-    wcscpy_s(nid.szTip, L"FileDrop");
+    wcscpy_s(nid.szTip, hidden_ ? L"FileDrop (đang tạm ẩn)" : L"FileDrop");
     ::Shell_NotifyIconW(NIM_ADD, &nid);
     nid.uVersion = NOTIFYICON_VERSION_4;
     ::Shell_NotifyIconW(NIM_SETVERSION, &nid);
@@ -453,13 +571,20 @@ void App::updateTrayIcon() {
     if (progress < 0) {
         // Lúc rảnh: dùng đúng icon của app (đúng kích thước theo DPI).
         ::LoadIconMetric(instance_, MAKEINTRESOURCEW(IDI_APP_ICON), LIM_SMALL, &trayIcon_);
+        if (trayIcon_ && hidden_) {  // đang tạm ẩn => icon mờ
+            if (HICON dimmed = createDimmedIcon(trayIcon_, 0.4)) {
+                ::DestroyIcon(trayIcon_);
+                trayIcon_ = dimmed;
+            }
+        }
     }
     if (!trayIcon_) trayIcon_ = createTrayIcon(::GetSystemMetrics(SM_CXSMICON), taskbarUsesDarkTheme(), progress);
     NOTIFYICONDATAW nid{sizeof(nid)};
     nid.hWnd = msgWnd_;
     nid.uID = kTrayIconId;
-    nid.uFlags = NIF_ICON;
+    nid.uFlags = NIF_ICON | NIF_TIP | NIF_SHOWTIP;
     nid.hIcon = trayIcon_;
+    wcscpy_s(nid.szTip, hidden_ ? L"FileDrop (đang tạm ẩn)" : L"FileDrop");
     ::Shell_NotifyIconW(NIM_MODIFY, &nid);
     if (old) ::DestroyIcon(old);
 }

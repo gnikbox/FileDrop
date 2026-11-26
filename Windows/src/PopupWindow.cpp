@@ -8,6 +8,7 @@
 #include <cmath>
 
 #include "App.h"
+#include "DropData.h"
 #include "resource.h"
 
 using namespace Gdiplus;
@@ -61,8 +62,8 @@ public:
     }
 
     HRESULT STDMETHODCALLTYPE DragEnter(IDataObject* data, DWORD, POINTL pt, DWORD* effect) override {
-        FORMATETC fmt{CF_HDROP, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL};
-        hasFiles_ = data && data->QueryGetData(&fmt) == S_OK;
+        // File thật, file ảo (Outlook...) hoặc ảnh (trình duyệt, Snipping Tool...).
+        hasFiles_ = hasDroppableData(data);
         owner_->noteDragEntered();  // đang kéo vào popup => không tự đóng khi thả chuột
         return DragOver(0, pt, effect);
     }
@@ -80,22 +81,8 @@ public:
         *effect = DROPEFFECT_NONE;
         if (!hasFiles_ || owner_->dragEffect(pt) == DROPEFFECT_NONE) return S_OK;
 
-        FORMATETC fmt{CF_HDROP, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL};
-        STGMEDIUM medium{};
-        if (data->GetData(&fmt, &medium) != S_OK) return S_OK;
-        std::vector<std::wstring> paths;
-        if (auto drop = static_cast<HDROP>(::GlobalLock(medium.hGlobal))) {
-            UINT count = ::DragQueryFileW(drop, 0xFFFFFFFF, nullptr, 0);
-            for (UINT i = 0; i < count; ++i) {
-                UINT len = ::DragQueryFileW(drop, i, nullptr, 0);
-                std::wstring path(len + 1, L'\0');
-                ::DragQueryFileW(drop, i, path.data(), len + 1);
-                path.resize(len);
-                paths.push_back(path);
-            }
-            ::GlobalUnlock(medium.hGlobal);
-        }
-        ::ReleaseStgMedium(&medium);
+        std::vector<std::wstring> paths = readDroppedFiles(data);
+        if (paths.empty()) return S_OK;
         *effect = DROPEFFECT_COPY;
         owner_->dropFiles(paths, pt);
         return S_OK;
@@ -287,6 +274,34 @@ void PopupWindow::computeLayout() {
     L.divider = RectF(x, y, cw, std::max(1.0f, px(1)));
     y += px(1) + gap;
 
+    // Footer giống macOS: "Máy chủ nhận file" (+ khung địa chỉ khi bật), "Tạm ẩn",
+    // rồi "Khởi động cùng Windows" + "Thoát".
+    L.webToggle = RectF(x, y, px(260), px(24));
+    y += px(24) + px(8);
+    if (!app_.webServerUrl().empty()) {
+        const float ip = px(10), iw = cw - 2 * ip;
+        float py = y + ip;
+        L.webOpen = RectF(x + cw - ip - px(22), py, px(22), px(22));
+        L.webCopy = RectF(L.webOpen.X - px(28), py, px(22), px(22));
+        L.webUrl = RectF(x + ip, py, L.webCopy.X - px(6) - (x + ip), px(22));
+        py += px(22) + px(6);
+        const auto& clients = app_.webClients();
+        if (clients.empty()) {
+            L.webHint = RectF(x + ip, py, iw, px(30));
+            py += px(30);
+        } else {
+            for (size_t i = 0; i < clients.size(); ++i) {
+                L.webRows.emplace_back(x + ip, py, iw, px(20));
+                L.webDisconnect.emplace_back(x + ip + iw - px(36), py, px(36), px(20));
+                py += px(20) + (i + 1 < clients.size() ? px(4) : 0);
+            }
+        }
+        py += ip;
+        L.webPanel = RectF(x, y, cw, py - y);
+        y = py + px(8);
+    }
+    L.hiddenToggle = RectF(x, y, px(240), px(24));
+    y += px(24) + px(8);
     L.autostart = RectF(x, y, px(220), px(24));
     L.quit = RectF(x + cw - px(64), y, px(64), px(24));
     y += px(24) + pad;
@@ -445,24 +460,70 @@ void PopupWindow::drawDropZone(Graphics& g) {
              theme_.secondaryText, StringAlignmentCenter);
 }
 
-void PopupWindow::drawFooter(Graphics& g) {
-    // Checkbox "Khởi động cùng Windows"
-    const RectF& a = layout_.autostart;
+void PopupWindow::drawCheckbox(Graphics& g, const RectF& a, bool checked, bool hovered, const wchar_t* label) {
     RectF box(a.X, a.Y + (a.Height - px(16)) / 2, px(16), px(16));
     GraphicsPath boxPath;
     addRoundRect(boxPath, box, px(4));
-    if (app_.autostartEnabled()) {
+    if (checked) {
         SolidBrush fill(theme_.accent);
         g.FillPath(&fill, &boxPath);
         drawGlyph(g, glyph::kCheck, box, 11, Color(255, 255, 255, 255));
     } else {
-        SolidBrush fill(hover_ == Hit::Autostart ? theme_.tileHover : theme_.background);
+        SolidBrush fill(hovered ? theme_.tileHover : theme_.background);
         g.FillPath(&fill, &boxPath);
         Pen border(theme_.dashed, px(1));
         g.DrawPath(&border, &boxPath);
     }
-    drawText(g, L"Khởi động cùng Windows", RectF(box.X + px(22), a.Y, a.Width - px(22), a.Height), 12,
-             FontStyleRegular, theme_.text);
+    drawText(g, label, RectF(box.X + px(22), a.Y, a.Width - px(22), a.Height), 12, FontStyleRegular, theme_.text);
+}
+
+void PopupWindow::drawWebPanel(Graphics& g) {
+    const RectF& panel = layout_.webPanel;
+    GraphicsPath bg;
+    addRoundRect(bg, panel, px(10));
+    SolidBrush fill(theme_.accentSoft);
+    g.FillPath(&fill, &bg);
+
+    const RectF& u = layout_.webUrl;
+    drawGlyph(g, glyph::kGlobe, RectF(u.X, u.Y, px(18), u.Height), 13, theme_.accent);
+    drawText(g, app_.webServerUrl(), RectF(u.X + px(22), u.Y, u.Width - px(22), u.Height), 12, FontStyleBold,
+             theme_.text, StringAlignmentNear, StringAlignmentCenter, false, L"Consolas");
+
+    auto iconButton = [&](const RectF& r, const wchar_t* gl, bool hovered) {
+        GraphicsPath path;
+        addRoundRect(path, r, px(6));
+        SolidBrush b(hovered ? theme_.tileHover : theme_.button);
+        g.FillPath(&b, &path);
+        drawGlyph(g, gl, r, 11, theme_.text);
+    };
+    iconButton(layout_.webCopy, glyph::kCopy, hover_ == Hit::WebCopy);
+    iconButton(layout_.webOpen, glyph::kOpenLink, hover_ == Hit::WebOpen);
+
+    if (layout_.webHint.Width > 0) {
+        drawText(g, L"Mở địa chỉ này trên trình duyệt của máy khác cùng mạng Wi-Fi. Bạn sẽ được hỏi trước khi máy đó kết nối.",
+                 layout_.webHint, 11, FontStyleRegular, theme_.secondaryText, StringAlignmentNear, StringAlignmentNear,
+                 true);
+    }
+    const auto& clients = app_.webClients();
+    for (size_t i = 0; i < clients.size() && i < layout_.webRows.size(); ++i) {
+        const RectF& r = layout_.webRows[i];
+        SolidBrush dot(theme_.success);
+        g.FillEllipse(&dot, RectF(r.X, r.Y + (r.Height - px(7)) / 2, px(7), px(7)));
+        const std::wstring line = clients[i].name + L"  ·  " + clients[i].ip;
+        drawText(g, line, RectF(r.X + px(13), r.Y, r.Width - px(13) - px(40), r.Height), 12, FontStyleRegular,
+                 theme_.text);
+        const bool hovered = hover_ == Hit::WebDisconnect && hoverTile_ == static_cast<int>(i);
+        drawText(g, L"Ngắt", layout_.webDisconnect[i], 11, hovered ? FontStyleUnderline : FontStyleRegular,
+                 theme_.accent, StringAlignmentFar);
+    }
+}
+
+void PopupWindow::drawFooter(Graphics& g) {
+    drawCheckbox(g, layout_.webToggle, !app_.webServerUrl().empty(), hover_ == Hit::WebToggle,
+                 L"Máy chủ nhận file qua trình duyệt");
+    if (layout_.webPanel.Width > 0) drawWebPanel(g);
+    drawCheckbox(g, layout_.hiddenToggle, app_.hidden(), hover_ == Hit::Hidden, L"Tạm ẩn — không nhận file");
+    drawCheckbox(g, layout_.autostart, app_.autostartEnabled(), hover_ == Hit::Autostart, L"Khởi động cùng Windows");
 
     // Nút "Thoát"
     GraphicsPath quitPath;
@@ -489,8 +550,13 @@ void PopupWindow::paint(HDC hdc) {
     const RectF& hd = layout_.header;
     drawGlyph(g, glyph::kApp, RectF(hd.X, hd.Y, px(24), hd.Height), 17, theme_.accent);
     drawText(g, L"FileDrop", RectF(hd.X + px(30), hd.Y, hd.Width - px(70), px(18)), 15, FontStyleBold, theme_.text);
-    drawText(g, app_.deviceName(), RectF(hd.X + px(30), hd.Y + px(18), hd.Width - px(70), px(14)), 11,
-             FontStyleRegular, theme_.secondaryText);
+    if (app_.hidden()) {
+        drawText(g, L"Đang tạm ẩn · không nhận file", RectF(hd.X + px(30), hd.Y + px(18), hd.Width - px(70), px(14)),
+                 11, FontStyleBold, theme_.warning);
+    } else {
+        drawText(g, app_.deviceName(), RectF(hd.X + px(30), hd.Y + px(18), hd.Width - px(70), px(14)), 11,
+                 FontStyleRegular, theme_.secondaryText);
+    }
     GraphicsPath refreshPath;
     addRoundRect(refreshPath, layout_.refresh, px(7));
     SolidBrush refreshFill(hover_ == Hit::Refresh ? theme_.tileHover : theme_.button);
@@ -523,6 +589,18 @@ PopupWindow::Hit PopupWindow::hitTest(POINT pt, int* tileIndex) const {
     const PointF p(static_cast<REAL>(pt.x), static_cast<REAL>(pt.y));
     if (tileIndex) *tileIndex = -1;
     if (layout_.refresh.Contains(p)) return Hit::Refresh;
+    if (layout_.webToggle.Contains(p)) return Hit::WebToggle;
+    if (layout_.webPanel.Width > 0) {
+        if (layout_.webCopy.Contains(p)) return Hit::WebCopy;
+        if (layout_.webOpen.Contains(p)) return Hit::WebOpen;
+        for (size_t i = 0; i < layout_.webDisconnect.size(); ++i) {
+            if (layout_.webDisconnect[i].Contains(p)) {
+                if (tileIndex) *tileIndex = static_cast<int>(i);
+                return Hit::WebDisconnect;
+            }
+        }
+    }
+    if (layout_.hiddenToggle.Contains(p)) return Hit::Hidden;
     if (layout_.autostart.Contains(p)) return Hit::Autostart;
     if (layout_.quit.Contains(p)) return Hit::Quit;
     if (layout_.cancel.Width > 0 && layout_.cancel.Contains(p)) return Hit::Cancel;
@@ -627,6 +705,14 @@ LRESULT PopupWindow::handle(UINT msg, WPARAM wParam, LPARAM lParam) {
             int tile = -1;
             switch (hitTest({GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)}, &tile)) {
                 case Hit::Refresh: app_.refresh(); break;
+                case Hit::Hidden: app_.toggleHidden(); break;
+                case Hit::WebToggle: app_.toggleWebServer(); break;
+                case Hit::WebCopy: app_.copyWebServerUrl(); break;
+                case Hit::WebOpen: app_.openWebServerUrl(); break;
+                case Hit::WebDisconnect:
+                    if (tile >= 0 && tile < static_cast<int>(app_.webClients().size()))
+                        app_.disconnectWebClient(app_.webClients()[tile].id);
+                    break;
                 case Hit::Autostart: app_.toggleAutostart(); break;
                 case Hit::Quit: app_.quit(); break;
                 case Hit::Cancel:

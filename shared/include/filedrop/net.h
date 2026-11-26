@@ -71,15 +71,21 @@ std::vector<std::string> broadcastAddresses();
 std::string localIpFor(const std::string& remoteIp);
 // IP cục bộ chính trong mạng LAN.
 std::string primaryLocalIp();
+// IP của card mạng LAN thật (Wi-Fi/Ethernet), bỏ qua VPN, máy ảo, Docker... — dùng để hiện địa chỉ cho người dùng.
+std::string lanIp();
 
 // --- TCP ---
-Socket listenTcp(uint16_t port, std::string* error);
+Socket listenTcp(uint16_t port, std::string* error, int backlog = 4);
 // Chờ tối đa timeoutMs; trả về socket không hợp lệ nếu hết giờ.
 Socket acceptTcp(const Socket& listener, int timeoutMs, Endpoint* peer);
 Socket connectTcp(const std::string& ip, uint16_t port, int timeoutMs, std::string* error);
 void setIoTimeout(const Socket& sock, int timeoutMs);
 bool sendAll(const Socket& sock, const void* data, size_t len);
 bool recvAll(const Socket& sock, void* data, size_t len);
+// Nhận tối đa len byte (ít nhất 1). Trả về số byte, 0 nếu bên kia đóng, <0 nếu lỗi/hết giờ.
+int recvSome(const Socket& sock, void* data, size_t len);
+// Ngắt cả 2 chiều — làm các lời gọi recv/send đang chờ trên socket này ở luồng khác trả về ngay.
+void shutdownBoth(socket_t fd);
 
 // select() trên nhiều socket. Trả về >0 nếu có socket đọc được, 0 nếu hết giờ, <0 nếu lỗi.
 int waitReadable(const std::vector<socket_t>& fds, int timeoutMs, std::vector<bool>* ready);

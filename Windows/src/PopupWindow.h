@@ -34,12 +34,15 @@ public:
     void dropFiles(const std::vector<std::wstring>& paths, POINTL screenPt);
 
 private:
-    enum class Hit { None, Refresh, Tile, Autostart, Quit, Cancel };
+    enum class Hit { None, Refresh, Tile, Hidden, Autostart, Quit, Cancel, WebToggle, WebCopy, WebOpen, WebDisconnect };
 
     struct Layout {
         float width = 0, height = 0;
-        Gdiplus::RectF header, refresh, section, grid, drop, status, divider, autostart, quit, cancel;
+        Gdiplus::RectF header, refresh, section, grid, drop, status, divider, hiddenToggle, autostart, quit, cancel;
         std::vector<Gdiplus::RectF> tiles;  // toạ độ trong vùng lưới (chưa trừ cuộn)
+        // Máy chủ nhận file qua web (khung chỉ có khi đang bật).
+        Gdiplus::RectF webToggle, webPanel, webUrl, webCopy, webOpen, webHint;
+        std::vector<Gdiplus::RectF> webRows, webDisconnect;
         float gridContentHeight = 0;
     };
 
@@ -64,6 +67,8 @@ private:
     void drawPeerGrid(Gdiplus::Graphics& g);
     void drawDropZone(Gdiplus::Graphics& g);
     void drawFooter(Gdiplus::Graphics& g);
+    void drawWebPanel(Gdiplus::Graphics& g);
+    void drawCheckbox(Gdiplus::Graphics& g, const Gdiplus::RectF& r, bool checked, bool hovered, const wchar_t* label);
 
     float px(float dip) const { return dip * scale_; }
 

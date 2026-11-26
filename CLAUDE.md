@@ -40,10 +40,11 @@
 ## Lệnh thường dùng
 - Build app macOS (lõi C++ + Swift → `build/macOS/FileDrop.app`): `./macOS/build.sh` (`CONFIG=Debug ./macOS/build.sh` để debug)
 - Chạy kiểm thử lõi: `./build/macOS/core/shared/filedrop_tests`
-- CLI thử nghiệm (đóng vai máy thứ 2 trên cùng Mac): `./build/macOS/core/shared/fdcli --id cli --name CLI list | listen [--yes] | send "<tên máy>" <file...>`
+- CLI thử nghiệm (đóng vai máy thứ 2 trên cùng Mac): `./build/macOS/core/shared/fdcli --id cli --name CLI list | listen [--yes] | send "<tên máy>" <file...> | web [--yes] [--packages <thư mục>]`
 - Kiểm tra build Windows từ macOS (MinGW): `cmake -S . -B build/Windows-mingw -DCMAKE_TOOLCHAIN_FILE=Windows/cmake/mingw-w64-x86_64.cmake && cmake --build build/Windows-mingw`
 - Build Android (APK debug → `android/app/build/outputs/apk/debug/`): `cd android && JAVA_HOME=~/Library/Java/JavaVirtualMachines/jbr-17.0.14/Contents/Home ./gradlew assembleDebug` (thêm `--offline` nếu không có mạng)
 - Cài lên điện thoại: `adb install -r -g android/app/build/outputs/apk/debug/app-debug.apk` (Xiaomi: phải bấm xác nhận trên máy)
+- Tài liệu song ngữ (build, tính năng, cách dùng, giao thức): `docs/index.html` — cập nhật khi thêm tính năng hoặc đổi cách build
 - Build Windows trên máy Windows (Visual Studio 2022): `cmake -S . -B build/Windows -G "Visual Studio 17 2022" && cmake --build build/Windows --config Release`
 
 ## Quy ước viết mã
@@ -66,7 +67,26 @@
   - Hỏi nhận file: hộp thoại trong app + thông báo có nút Chấp nhận/Từ chối.
 - Icon app: vẽ bằng `tools/icon/render_icon.swift` (PNG nhiều cỡ) → `tools/icon/make_ico.py` ra `Windows/FileDrop.ico`
   (icon exe = icon tray lúc rảnh) và `iconutil` ra `macOS/FileDrop/Resources/AppIcon.icns`. Menu bar macOS vẫn dùng SF Symbol đơn sắc.
+- Kéo thả nhận cả file promise / file ảo / dữ liệu ảnh (ảnh chụp màn hình góc dưới phải, Photos, Mail, Outlook, ảnh trình duyệt):
+  macOS `DropSupport.swift` (`DropReader` + `FileDropTarget` AppKit làm background vùng thả, thay `dropDestination`),
+  Windows `DropData.cpp` (CF_HDROP → FileGroupDescriptorW/FileContents → PNG → CF_DIB). File tạm lưu ở Caches / %TEMP%\FileDrop\Dropped, dọn sau 1 ngày.
+  Đã thử kéo ảnh chụp màn hình thật trên macOS.
 - Popup Windows tự đóng khi bấm ra ngoài / Alt+Tab / Esc, nhưng giữ nguyên khi đang kéo file từ Explorer vào (theo dõi chuột trong `pollOutsideClick`).
+- Tạm ẩn (cả 3 app, lưu qua các lần mở): `Engine::setHidden` — gửi BYE, không trả lời DISCOVER, gói của máy ẩn mang `hidden=1`
+  (máy khác không thêm vào danh sách), yêu cầu gửi file tới bị tự từ chối với `reason=hidden`. Vẫn thấy máy khác và gửi đi được.
+  UI: checkbox/công tắc "Tạm ẩn — không nhận file", dòng phụ màu cam ở header, icon tray/menu bar mờ.
+- Máy chủ nhận file qua trình duyệt (macOS + Windows + Android): `WebServer` (webserver.h) do `Engine` sở hữu — `startWebServer/stopWebServer`,
+  `respondWebClient`, `disconnectWebClient`, callback `onWebClientChanged`. HTTP/1.1 tự viết, cổng TCP ngẫu nhiên, `Connection: close`.
+  - Trang web: `shared/web/index.html` (song ngữ, sáng/tối, kéo thả cả thư mục), nhúng vào lõi lúc build qua `shared/cmake/embed_file.cmake`.
+  - Mỗi lần thả trên trang = 1 batch = 1 phiên nhận (Direction::Receive, peer.os = "web") nên dùng chung progress/thông báo với UDP/TCP.
+  - Kết nối không tự hết hạn; chỉ kết thúc khi người dùng ngắt máy khách / tắt máy chủ / máy khách tự ngắt. Không lưu bật/tắt qua các lần mở.
+  - Địa chỉ hiện ra dùng `net::lanIp()` (bỏ qua VPN/card ảo), không dùng route mặc định.
+  - Trang web gợi ý máy khách tải app hợp HĐH (`/api/info` có `apps`, `GET /download/<platform>`, không cần duyệt):
+    `Engine::setWebDownloads(list, packageDirs)` + `scanWebDownloads` (nhận theo đuôi/tên file).
+    macOS nén chính .app (`AppPackages.swift`, cache trong Caches) + `Resources/Packages` (build.sh chép từ `build/packages`)
+    + `~/Library/Application Support/FileDrop/Packages`; Windows phục vụ chính exe (MSVC runtime tĩnh) + `packages\` cạnh exe;
+    Android phục vụ APK đã cài + `getExternalFilesDir("packages")`.
+  - Android: JNI `nativeWeb*`, `FileDrop.setWebServer/respondWeb/disconnectWeb`; service giữ chạy khi máy chủ bật. Đã thử trên Xiaomi thật (nhận file, ngắt kết nối).
 - Chưa làm: iOS (share extension), ký số/notarize, keystore phát hành Android.
 
 ## Lưu ý

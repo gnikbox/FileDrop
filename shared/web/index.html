@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>FileDrop</title>
+<style>
+:root{
+  --bg:#f3f4f7;--card:#ffffff;--text:#1d1d1f;--muted:#6e6e73;--line:#e3e4e8;
+  --accent:#0a84ff;--accent-soft:rgba(10,132,255,.10);--ok:#1f9d55;--warn:#d9822b;--err:#d93b3b;
+  --shadow:0 1px 2px rgba(0,0,0,.05),0 12px 32px rgba(0,0,0,.08);
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#121214;--card:#1d1d20;--text:#f2f2f4;--muted:#9a9aa1;--line:#2e2e33;
+  --accent:#3d9bff;--accent-soft:rgba(61,155,255,.14);--ok:#3bbf75;--warn:#f0a050;--err:#f06464;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 32px rgba(0,0,0,.35);
+}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--text)}
+body{font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:32px 16px}
+.card{width:100%;max-width:460px;background:var(--card);border-radius:18px;box-shadow:var(--shadow);padding:22px}
+header{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.logo{width:40px;height:40px;border-radius:11px;background:linear-gradient(145deg,#3aa0ff,#0a6cff);
+  display:grid;place-items:center;flex:none}
+.logo svg{width:22px;height:22px}
+h1{font-size:17px;margin:0;font-weight:700}
+.sub{color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lang{margin-left:auto;border:1px solid var(--line);background:transparent;color:var(--muted);
+  border-radius:8px;font:600 12px/1 inherit;padding:6px 8px;cursor:pointer}
+label{display:block;font-size:13px;color:var(--muted);margin:0 0 6px}
+input[type=text]{width:100%;font:inherit;padding:11px 12px;border-radius:10px;border:1px solid var(--line);
+  background:transparent;color:var(--text);outline:none}
+input[type=text]:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font:600 14px/1 inherit;
+  border-radius:10px;padding:11px 16px;border:0;cursor:pointer;background:var(--accent);color:#fff}
+.btn.block{width:100%;margin-top:14px}
+.btn.ghost{background:transparent;color:var(--accent);padding:8px 4px}
+.btn.ghost.danger{color:var(--err)}
+.btn:disabled{opacity:.5;cursor:default}
+.center{text-align:center}
+.msg{font-size:15px;font-weight:600;margin:14px 0 4px}
+.hint{color:var(--muted);font-size:13px;margin:0}
+.spinner{width:44px;height:44px;margin:8px auto 0;border-radius:50%;border:4px solid var(--line);
+  border-top-color:var(--accent);animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.icon-big{width:48px;height:48px;margin:6px auto 0;display:block}
+.drop{position:relative;border:2px dashed var(--line);border-radius:14px;min-height:190px;display:flex;
+  flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:18px;text-align:center;
+  cursor:pointer;transition:background .15s,border-color .15s}
+.drop:hover{border-color:var(--accent)}
+.drop.over{background:var(--accent-soft);border-color:var(--accent)}
+.drop svg{width:40px;height:40px;color:var(--accent)}
+.drop .msg{margin:4px 0 0}
+.pick{display:flex;gap:14px;justify-content:center;margin-top:4px}
+.pick a{color:var(--accent);font-size:13px;font-weight:600;text-decoration:none;cursor:pointer}
+.progress{display:flex;align-items:center;gap:16px;padding:6px 2px}
+.ring{width:76px;height:76px;flex:none;position:relative}
+.ring svg{width:76px;height:76px;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:7}
+.ring .track{stroke:var(--line)}
+.ring .bar{stroke:var(--accent);stroke-linecap:round;transition:stroke-dashoffset .15s linear}
+.ring span{position:absolute;inset:0;display:grid;place-items:center;font-weight:700;font-size:15px;
+  font-variant-numeric:tabular-nums}
+.pinfo{min-width:0;flex:1}
+.pinfo .msg{margin:0 0 2px;font-size:14px}
+.pinfo .hint{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.history{list-style:none;margin:16px 0 0;padding:0;border-top:1px solid var(--line)}
+.history li{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:13px}
+.history li .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.history li .s{color:var(--muted);flex:none}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--ok)}
+.dot.err{background:var(--err)}
+.foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:16px;font-size:13px;color:var(--muted)}
+.foot .who{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.foot .who b{color:var(--text);font-weight:600}
+.queue{color:var(--muted);font-size:12px;margin-top:6px}
+.note{margin-top:14px;font-size:13px;padding:10px 12px;border-radius:10px;background:var(--accent-soft)}
+.note.err{background:rgba(217,59,59,.12);color:var(--err)}
+.apps{margin-top:16px;padding:18px 22px}
+.apps .row{display:flex;align-items:center;gap:12px}
+.apps .row svg{width:28px;height:28px;flex:none;color:var(--accent)}
+.apps .msg{margin:0;font-size:14px}
+.apps .btn{text-decoration:none;margin-top:12px;width:100%}
+.apps .others{margin-top:10px;font-size:13px;color:var(--muted)}
+.apps .others a{color:var(--accent);font-weight:600;text-decoration:none;margin-left:8px;white-space:nowrap;display:inline-block}
+small.brand{color:var(--muted);font-size:12px;margin-top:16px}
+</style>
+</head>
+<body>
+<main class="card">
+  <header>
+    <div class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg></div>
+    <div style="min-width:0">
+      <h1 data-t="title"></h1>
+      <div class="sub" id="hostLine"></div>
+    </div>
+    <button class="lang" id="langBtn" type="button"></button>
+  </header>
+
+  <!-- 1. Nhập tên và xin kết nối -->
+  <section id="vConnect" hidden>
+    <form id="connectForm">
+      <label for="nameInput" data-t="yourName"></label>
+      <input type="text" id="nameInput" maxlength="40" autocomplete="off" required>
+      <button class="btn block" id="connectBtn" type="submit" data-t="connect"></button>
+    </form>
+    <p class="hint" style="margin-top:12px" data-t="connectHint"></p>
+  </section>
+
+  <!-- 2. Chờ máy chủ đồng ý -->
+  <section id="vWaiting" class="center" hidden>
+    <div class="spinner"></div>
+    <p class="msg" id="waitMsg"></p>
+    <p class="hint" data-t="waitHint"></p>
+    <button class="btn ghost danger" id="cancelWaitBtn" type="button" data-t="cancel"></button>
+  </section>
+
+  <!-- 3. Thả file -->
+  <section id="vReady" hidden>
+    <div class="drop" id="drop" tabindex="0" role="button">
+      <div id="dropIdle" style="display:contents">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6"/><path d="m9.5 14.5 2.5 2.5 2.5-2.5"/></svg>
+        <p class="msg" data-t="dropHere"></p>
+        <div class="pick"><a id="pickFiles" data-t="pickFiles"></a><a id="pickFolder" data-t="pickFolder"></a></div>
+      </div>
+      <div id="dropBusy" class="progress" hidden>
+        <div class="ring"><svg viewBox="0 0 80 80"><circle class="track" cx="40" cy="40" r="34"/><circle class="bar" id="ringBar" cx="40" cy="40" r="34"/></svg><span id="ringPct">0%</span></div>
+        <div class="pinfo" style="text-align:left">
+          <p class="msg" id="busyTitle"></p>
+          <p class="hint" id="busyFile"></p>
+          <p class="hint" id="busySpeed"></p>
+          <button class="btn ghost danger" id="cancelUploadBtn" type="button" data-t="cancel"></button>
+        </div>
+      </div>
+    </div>
+    <div class="queue" id="queueLine" hidden></div>
+    <input type="file" id="fileInput" multiple hidden>
+    <input type="file" id="folderInput" webkitdirectory multiple hidden>
+    <ul class="history" id="history" hidden></ul>
+    <div class="foot">
+      <span class="who" id="whoLine"></span>
+      <button class="btn ghost danger" id="leaveBtn" type="button" data-t="disconnect"></button>
+    </div>
+  </section>
+
+  <!-- 4. Bị từ chối / đã ngắt -->
+  <section id="vEnded" class="center" hidden>
+    <svg class="icon-big" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>
+    <p class="msg" id="endMsg"></p>
+    <p class="hint" id="endHint"></p>
+    <button class="btn block" id="retryBtn" type="button" data-t="reconnect"></button>
+  </section>
+
+  <div class="note" id="note" hidden></div>
+</main>
+<!-- Gợi ý tải app FileDrop hợp với máy khách (danh sách lấy từ /api/info) -->
+<aside class="card apps" id="apps" hidden>
+  <div class="row">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8"/><path d="M12 16v4"/></svg>
+    <div style="min-width:0">
+      <p class="msg" data-t="appTitle"></p>
+      <p class="hint" data-t="appSub"></p>
+    </div>
+  </div>
+  <a class="btn" id="appMain" hidden></a>
+  <p class="hint" id="appNone" style="margin-top:10px" hidden></p>
+  <p class="hint" id="appHow" style="margin-top:8px" hidden></p>
+  <div class="others" id="appOthers" hidden></div>
+</aside>
+<small class="brand">FileDrop</small>
+
+<script>
+(function () {
+  "use strict";
+  var I18N = {
+    vi: {
+      title: "Gửi file", to: "tới {h}", yourName: "Tên máy của bạn", connect: "Kết nối",
+      connectHint: "Người dùng máy chủ sẽ được hỏi có đồng ý cho bạn kết nối hay không.",
+      waiting: "Đang chờ {h} đồng ý…", waitHint: "Hãy nhờ người dùng máy đó bấm “Chấp nhận”.",
+      cancel: "Hủy", dropHere: "Thả file vào đây để gửi", pickFiles: "Chọn file", pickFolder: "Chọn thư mục",
+      sending: "Đang gửi tới {h}", fileOf: "File {i}/{n}: {f}", disconnect: "Ngắt kết nối",
+      connectedAs: "Đã kết nối với <b>{h}</b>", declined: "{h} đã từ chối kết nối",
+      declinedHint: "Bạn có thể xin kết nối lại.", closed: "Kết nối đã kết thúc",
+      closedHint: "Máy chủ đã tắt hoặc đã ngắt kết nối với bạn.", left: "Bạn đã ngắt kết nối",
+      leftHint: "", reconnect: "Kết nối lại", sent: "Đã gửi", failed: "Thất bại", cancelled: "Đã hủy",
+      files: "{n} file", queued: "Còn {n} lượt đang chờ gửi", errNet: "Không liên lạc được với máy chủ.",
+      errBusy: "Máy chủ đang bận, thử lại sau ít phút.", errSpace: "Máy chủ không đủ dung lượng trống.",
+      errHost: "Máy chủ đã hủy lượt gửi này.", empty: "Không có file nào để gửi (thư mục rỗng?).",
+      appTitle: "Cài ứng dụng FileDrop", appSub: "Gửi và nhận file giữa các máy, không cần mở trình duyệt.",
+      appGet: "Tải cho {os} · {size}", appNone: "Máy chủ này chưa có bản cài cho {os}.", appOthers: "Bản khác:",
+      how_macos: "Giải nén rồi kéo FileDrop vào Applications. Lần đầu mở: chuột phải vào app → Mở.",
+      how_windows: "Chạy FileDrop.exe. Nếu Windows cảnh báo, chọn “Thông tin thêm” → “Vẫn chạy”.",
+      how_android: "Mở file APK vừa tải và cho phép cài ứng dụng từ nguồn này.",
+      lang: "EN"
+    },
+    en: {
+      title: "Send files", to: "to {h}", yourName: "Your device name", connect: "Connect",
+      connectHint: "The person at the host will be asked whether to let you connect.",
+      waiting: "Waiting for {h} to accept…", waitHint: "Ask them to click “Accept”.",
+      cancel: "Cancel", dropHere: "Drop files here to send", pickFiles: "Choose files", pickFolder: "Choose folder",
+      sending: "Sending to {h}", fileOf: "File {i}/{n}: {f}", disconnect: "Disconnect",
+      connectedAs: "Connected to <b>{h}</b>", declined: "{h} declined the connection",
+      declinedHint: "You can ask to connect again.", closed: "Connection ended",
+      closedHint: "The host stopped the server or disconnected you.", left: "You disconnected",
+      leftHint: "", reconnect: "Connect again", sent: "Sent", failed: "Failed", cancelled: "Cancelled",
+      files: "{n} files", queued: "{n} more waiting to send", errNet: "Can't reach the host.",
+      errBusy: "The host is busy, try again shortly.", errSpace: "The host is out of disk space.",
+      errHost: "The host cancelled this transfer.", empty: "Nothing to send (empty folder?).",
+      appTitle: "Get the FileDrop app", appSub: "Send and receive files between devices without a browser.",
+      appGet: "Download for {os} · {size}", appNone: "This host has no installer for {os}.", appOthers: "Other platforms:",
+      how_macos: "Unzip it and drag FileDrop to Applications. First launch: right-click the app → Open.",
+      how_windows: "Run FileDrop.exe. If Windows warns you, choose “More info” → “Run anyway”.",
+      how_android: "Open the downloaded APK and allow installing apps from this source.",
+      lang: "VI"
+    }
+  };
+
+  function $(id) { return document.getElementById(id); }
+  function store(kind) { try { return window[kind]; } catch (e) { return null; } }
+  function load(key) { try { var s = store("localStorage"); return s ? s.getItem(key) : null; } catch (e) { return null; } }
+  function save(key, v) { try { var s = store("localStorage"); if (s) s.setItem(key, v); } catch (e) {} }
+  function sload(key) { try { var s = store("sessionStorage"); return s ? s.getItem(key) : null; } catch (e) { return null; } }
+  function ssave(key, v) { try { var s = store("sessionStorage"); if (!s) return; if (v == null) s.removeItem(key); else s.setItem(key, v); } catch (e) {} }
+
+  var lang = load("fd.lang") || ((navigator.language || "en").toLowerCase().indexOf("vi") === 0 ? "vi" : "en");
+  var host = "…";
+  var session = null;   // {s, c, name}
+  var view = "connect";
+  var endKind = "closed";
+  var pollGen = 0;
+  var queue = [];       // các lượt thả đang chờ
+  var current = null;   // lượt đang gửi
+  var history = [];
+  var apps = [];        // bản cài máy chủ có sẵn: [{platform, name, size}]
+  var OS_NAMES = { macos: "macOS", windows: "Windows", android: "Android", ios: "iOS", linux: "Linux" };
+
+  // HĐH của máy khách (iPadOS báo là Mac nhưng có màn cảm ứng).
+  function clientOs() {
+    var ua = navigator.userAgent || "";
+    var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
+    if (/Android/i.test(ua)) return "android";
+    if (/iPhone|iPad|iPod/.test(ua) || (/Mac/i.test(p) && navigator.maxTouchPoints > 1)) return "ios";
+    if (/Win/i.test(p) || /Windows/.test(ua)) return "windows";
+    if (/Mac/i.test(p) || /Mac OS X/.test(ua)) return "macos";
+    if (/Linux|X11|CrOS/i.test(p + " " + ua)) return "linux";
+    return "";
+  }
+  var myOs = clientOs();
+
+  function t(key, vars) {
+    var s = (I18N[lang] && I18N[lang][key]) || I18N.en[key] || key;
+    if (vars) for (var k in vars) s = s.split("{" + k + "}").join(vars[k]);
+    return s;
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; });
+  }
+  function fmtBytes(n) {
+    var u = ["B", "KB", "MB", "GB", "TB"], i = 0;
+    while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+    return (i === 0 ? n : n.toFixed(n < 10 ? 1 : 0)) + " " + u[i];
+  }
+
+  // ---------- Hiển thị ----------
+  function render() {
+    document.documentElement.lang = lang;
+    document.querySelectorAll("[data-t]").forEach(function (el) { el.textContent = t(el.getAttribute("data-t")); });
+    $("langBtn").textContent = t("lang");
+    $("hostLine").textContent = t("to", { h: host });
+    ["connect", "waiting", "ready", "ended"].forEach(function (v) {
+      $("v" + v.charAt(0).toUpperCase() + v.slice(1)).hidden = view !== v;
+    });
+    $("waitMsg").textContent = t("waiting", { h: host });
+    $("whoLine").innerHTML = t("connectedAs", { h: esc(host) });
+    if (view === "ended") {
+      $("endMsg").textContent = t(endKind, { h: host });
+      $("endHint").textContent = t(endKind + "Hint");
+    }
+    renderProgress();
+    renderHistory();
+    renderApps();
+  }
+
+  function renderApps() {
+    var box = $("apps");
+    box.hidden = apps.length === 0;  // máy chủ chưa có bản cài nào thì không hiện
+    if (box.hidden) return;
+    var mine = null;
+    apps.forEach(function (a) { if (a.platform === myOs) mine = a; });
+    var osName = OS_NAMES[myOs] || myOs;
+    var main = $("appMain");
+    main.hidden = !mine;
+    $("appNone").hidden = !!mine || !myOs;
+    $("appHow").hidden = !mine || !I18N.en["how_" + myOs];
+    if (mine) {
+      main.href = "/download/" + encodeURIComponent(mine.platform);
+      main.setAttribute("download", mine.name);
+      main.textContent = t("appGet", { os: osName, size: fmtBytes(mine.size) });
+      $("appHow").textContent = t("how_" + myOs);
+    } else {
+      $("appNone").textContent = t("appNone", { os: osName });
+    }
+    var others = apps.filter(function (a) { return a !== mine; });
+    $("appOthers").hidden = others.length === 0;
+    $("appOthers").innerHTML = esc(t("appOthers")) + others.map(function (a) {
+      return '<a href="/download/' + encodeURIComponent(a.platform) + '" download="' + esc(a.name) + '">' +
+        esc(OS_NAMES[a.platform] || a.platform) + " · " + esc(fmtBytes(a.size)) + "</a>";
+    }).join("");
+  }
+
+  function renderProgress() {
+    var busy = !!current;
+    $("dropIdle").hidden = busy;
+    $("dropIdle").style.display = busy ? "none" : "contents";
+    $("dropBusy").hidden = !busy;
+    $("drop").classList.toggle("busy", busy);
+    var C = 2 * Math.PI * 34;
+    $("ringBar").style.strokeDasharray = C;
+    if (busy) {
+      var pct = current.total ? Math.min(1, current.sent / current.total) : 1;
+      $("ringBar").style.strokeDashoffset = C * (1 - pct);
+      $("ringPct").textContent = Math.floor(pct * 100) + "%";
+      $("busyTitle").textContent = t("sending", { h: host });
+      var f = current.files[current.index];
+      $("busyFile").textContent = f ? t("fileOf", { i: current.index + 1, n: current.files.length, f: f.path }) : "";
+      $("busySpeed").textContent = fmtBytes(current.sent) + " / " + fmtBytes(current.total) +
+        (current.speed ? " · " + fmtBytes(current.speed) + "/s" : "");
+    }
+    $("queueLine").hidden = queue.length === 0;
+    $("queueLine").textContent = t("queued", { n: queue.length });
+  }
+
+  function renderHistory() {
+    var ul = $("history");
+    ul.hidden = history.length === 0;
+    ul.innerHTML = history.slice(0, 8).map(function (h) {
+      var label = h.files.length === 1 ? h.files[0].path : t("files", { n: h.files.length });
+      var status = h.status === "ok" ? t("sent") : h.status === "cancel" ? t("cancelled") : t("failed");
+      return '<li><span class="dot' + (h.status === "ok" ? "" : " err") + '"></span><span class="t">' + esc(label) +
+        '</span><span class="s">' + esc(fmtBytes(h.total)) + " · " + esc(status) + "</span></li>";
+    }).join("");
+  }
+
+  var noteTimer = null;
+  function note(text, isErr) {
+    var n = $("note");
+    n.textContent = text;
+    n.className = "note" + (isErr ? " err" : "");
+    n.hidden = !text;
+    clearTimeout(noteTimer);
+    if (text) noteTimer = setTimeout(function () { n.hidden = true; }, 6000);
+  }
+
+  function go(v) { view = v; render(); }
+
+  // ---------- Mạng ----------
+  function api(method, path, params, body) {
+    var q = Object.keys(params || {}).map(function (k) { return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]); }).join("&");
+    return fetch(path + (q ? "?" + q : ""), { method: method, body: body, cache: "no-store" }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) { j._status = r.status; return j; });
+    });
+  }
+
+  function guessName() {
+    var ua = navigator.userAgent;
+    if (/iPhone/.test(ua)) return "iPhone";
+    if (/iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return "iPad";
+    if (/Android/.test(ua)) return "Android";
+    if (/Windows/.test(ua)) return "Windows PC";
+    if (/Macintosh/.test(ua)) return "Mac";
+    if (/Linux/.test(ua)) return "Linux";
+    return "";
+  }
+
+  function connect(name) {
+    $("connectBtn").disabled = true;
+    api("POST", "/api/hello", {}, name).then(function (j) {
+      $("connectBtn").disabled = false;
+      if (j._status === 429) return note(t("errBusy"), true);
+      if (!j.session) return note(t("errNet"), true);
+      session = { s: j.session, c: j.client, name: name };
+      ssave("fd.session", JSON.stringify(session));
+      go("waiting");
+      poll("pending");
+    }).catch(function () { $("connectBtn").disabled = false; note(t("errNet"), true); });
+  }
+
+  // Long-poll trạng thái: máy chủ giữ request tới khi trạng thái khác `known` (tối đa ~20 giây).
+  function poll(known) {
+    var gen = ++pollGen, failures = 0;
+    (function loop(k) {
+      if (gen !== pollGen || !session) return;
+      api("GET", "/api/status", { s: session.s, c: session.c, known: k }).then(function (j) {
+        if (gen !== pollGen) return;
+        failures = 0;
+        applyState(j.state);
+        if (j.state === "pending" || j.state === "accepted") loop(j.state);
+      }).catch(function () {
+        if (gen !== pollGen) return;
+        if (++failures >= 3) return applyState("closed");
+        setTimeout(function () { loop(k); }, 1500);
+      });
+    })(known);
+  }
+
+  function applyState(state) {
+    if (state === "pending") { if (view !== "waiting") go("waiting"); return; }
+    if (state === "accepted") { if (view !== "ready") go("ready"); return; }
+    endSession(state === "declined" ? "declined" : "closed");
+  }
+
+  function endSession(kind) {
+    pollGen++;
+    session = null;
+    ssave("fd.session", null);
+    if (current && current.xhr) current.xhr.abort();
+    current = null;
+    queue = [];
+    endKind = kind;
+    go("ended");
+  }
+
+  function leave() {
+    if (session) api("POST", "/api/bye", { s: session.s }).catch(function () {});
+    endSession("left");
+  }
+
+  // ---------- Gom file từ thao tác thả ----------
+  function readEntry(entry, out) {
+    return new Promise(function (resolve) {
+      if (entry.isFile) {
+        entry.file(function (f) { out.push({ file: f, path: entry.fullPath.replace(/^\/+/, "") }); resolve(); }, function () { resolve(); });
+      } else if (entry.isDirectory) {
+        var reader = entry.createReader(), all = [];
+        (function more() {
+          reader.readEntries(function (list) {
+            if (!list.length) {
+              Promise.all(all.map(function (e) { return readEntry(e, out); })).then(resolve);
+            } else { all = all.concat(Array.prototype.slice.call(list)); more(); }
+          }, function () { resolve(); });
+        })();
+      } else { resolve(); }
+    });
+  }
+
+  function filesFromDrop(dt) {
+    var items = dt.items, out = [];
+    if (items && items.length && items[0].webkitGetAsEntry) {
+      var entries = [];
+      for (var i = 0; i < items.length; i++) {
+        var e = items[i].kind === "file" && items[i].webkitGetAsEntry();
+        if (e) entries.push(e);
+      }
+      if (entries.length) {
+        return Promise.all(entries.map(function (e) { return readEntry(e, out); })).then(function () { return out; });
+      }
+    }
+    for (var j = 0; j < dt.files.length; j++) out.push({ file: dt.files[j], path: dt.files[j].name });
+    return Promise.resolve(out);
+  }
+
+  function filesFromInput(input) {
+    var out = [];
+    for (var i = 0; i < input.files.length; i++) {
+      var f = input.files[i];
+      out.push({ file: f, path: f.webkitRelativePath || f.name });
+    }
+    input.value = "";
+    return out;
+  }
+
+  function enqueue(files) {
+    if (!files.length) return note(t("empty"), true);
+    queue.push(files);
+    renderProgress();
+    if (!current) next();
+  }
+
+  // ---------- Gửi ----------
+  function next() {
+    if (current || !queue.length || !session) return;
+    var files = queue.shift();
+    var total = files.reduce(function (a, f) { return a + f.file.size; }, 0);
+    current = { files: files, total: total, sent: 0, index: 0, base: 0, xhr: null, batch: null, speed: 0,
+                t0: Date.now(), cancelled: false };
+    renderProgress();
+    var single = files.length === 1 ? files[0].path.split("/").pop() : "";
+    api("POST", "/api/batch", { s: session.s, count: files.length, total: total, name: single }).then(function (j) {
+      if (!current) return;
+      if (!j.batch) return finish(j._status === 507 ? "errSpace" : j._status === 403 ? "errHost" : "errNet");
+      current.batch = j.batch;
+      sendFile();
+    }).catch(function () { finish("errNet"); });
+  }
+
+  function sendFile() {
+    var c = current;
+    if (!c || !session) return;
+    if (c.index >= c.files.length) return finish(null);
+    var item = c.files[c.index];
+    var xhr = new XMLHttpRequest();
+    c.xhr = xhr;
+    xhr.open("PUT", "/api/upload?s=" + encodeURIComponent(session.s) + "&b=" + encodeURIComponent(c.batch) +
+      "&path=" + encodeURIComponent(item.path));
+    xhr.upload.onprogress = function (e) {
+      if (current !== c) return;
+      c.sent = c.base + e.loaded;
+      var secs = (Date.now() - c.t0) / 1000;
+      c.speed = secs > 0.5 ? c.sent / secs : 0;
+      renderProgress();
+    };
+    xhr.onload = function () {
+      if (current !== c) return;
+      if (xhr.status !== 200) return finish(c.cancelled ? "cancel" : xhr.status === 403 || xhr.status === 409 ? "errHost" : "errNet");
+      c.base += item.file.size;
+      c.sent = c.base;
+      c.index++;
+      sendFile();
+    };
+    xhr.onerror = function () { if (current === c) finish(c.cancelled ? "cancel" : "errNet"); };
+    xhr.onabort = function () { if (current === c) finish("cancel"); };
+    xhr.send(item.file);
+  }
+
+  function finish(err) {
+    var c = current;
+    if (!c) return;
+    current = null;
+    history.unshift({ files: c.files, total: c.total, status: err ? (err === "cancel" ? "cancel" : "err") : "ok" });
+    if (err && err !== "cancel") note(t(err), true);
+    if (err && c.batch && session) api("POST", "/api/batch/end", { s: session.s, b: c.batch }).catch(function () {});
+    render();
+    next();
+  }
+
+  function cancelUpload() {
+    if (!current) return;
+    current.cancelled = true;
+    if (current.xhr) current.xhr.abort(); else finish("cancel");
+  }
+
+  // ---------- Sự kiện ----------
+  $("langBtn").onclick = function () { lang = lang === "vi" ? "en" : "vi"; save("fd.lang", lang); render(); };
+  $("connectForm").onsubmit = function (e) {
+    e.preventDefault();
+    var name = $("nameInput").value.trim();
+    if (!name) return;
+    save("fd.name", name);
+    connect(name);
+  };
+  $("cancelWaitBtn").onclick = leave;
+  $("leaveBtn").onclick = leave;
+  $("retryBtn").onclick = function () { go("connect"); $("nameInput").focus(); };
+  $("cancelUploadBtn").onclick = function (e) { e.stopPropagation(); cancelUpload(); };
+
+  var drop = $("drop");
+  drop.onclick = function (e) { if (!current && e.target.id !== "pickFolder") $("fileInput").click(); };
+  drop.onkeydown = function (e) { if ((e.key === "Enter" || e.key === " ") && !current) { e.preventDefault(); $("fileInput").click(); } };
+  $("pickFolder").onclick = function (e) { e.stopPropagation(); $("folderInput").click(); };
+  $("pickFiles").onclick = function (e) { e.stopPropagation(); $("fileInput").click(); };
+  $("fileInput").onchange = function () { enqueue(filesFromInput(this)); };
+  $("folderInput").onchange = function () { enqueue(filesFromInput(this)); };
+  if (!("webkitdirectory" in document.createElement("input")) || /iPhone|iPad|Android/.test(navigator.userAgent)) {
+    $("pickFolder").hidden = true;
+  }
+
+  var depth = 0;
+  document.addEventListener("dragenter", function (e) { e.preventDefault(); if (view === "ready") { depth++; drop.classList.add("over"); } });
+  document.addEventListener("dragleave", function () { if (--depth <= 0) { depth = 0; drop.classList.remove("over"); } });
+  document.addEventListener("dragover", function (e) { e.preventDefault(); });
+  document.addEventListener("drop", function (e) {
+    e.preventDefault();
+    depth = 0;
+    drop.classList.remove("over");
+    if (view !== "ready" || !e.dataTransfer) return;
+    filesFromDrop(e.dataTransfer).then(enqueue);
+  });
+  window.addEventListener("beforeunload", function (e) { if (current) { e.preventDefault(); e.returnValue = ""; } });
+
+  // ---------- Khởi động ----------
+  $("nameInput").value = load("fd.name") || guessName();
+  api("GET", "/api/info").then(function (j) {
+    if (j.host) { host = j.host; document.title = "FileDrop · " + host; }
+    if (Array.isArray(j.apps)) apps = j.apps;
+    render();
+  }).catch(function () {});
+
+  try { session = JSON.parse(sload("fd.session") || "null"); } catch (e) { session = null; }
+  if (session && session.s) {
+    // Tải lại trang: dùng lại phiên cũ nếu máy chủ còn nhớ, không cần xin phép lại.
+    view = "waiting";
+    render();
+    api("GET", "/api/status", { s: session.s, c: session.c }).then(function (j) {
+      if (j.state === "pending" || j.state === "accepted") { applyState(j.state); poll(j.state); }
+      else { session = null; ssave("fd.session", null); go("connect"); }
+    }).catch(function () { session = null; go("connect"); });
+  } else {
+    go("connect");
+  }
+})();
+</script>
+</body>
+</html>

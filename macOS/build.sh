@@ -31,6 +31,13 @@ if [ -f "$ROOT/macOS/FileDrop/Resources/AppIcon.icns" ]; then
     cp "$ROOT/macOS/FileDrop/Resources/AppIcon.icns" "$APP/Contents/Resources/"
 fi
 
+# Bản cài cho nền tảng khác (máy chủ web cho máy khách tải): chép từ build/packages nếu có (.exe, .apk, *Windows*.zip...).
+if [ -d "$BUILD/../packages" ]; then
+    mkdir -p "$APP/Contents/Resources/Packages"
+    find "$BUILD/../packages" -maxdepth 1 -type f ! -name '.*' ! -iname '*mac*' ! -name '*.dmg' \
+        -exec cp {} "$APP/Contents/Resources/Packages/" \;
+fi
+
 echo "==> Ký ad-hoc"
 codesign --force --sign - "$APP" >/dev/null
 

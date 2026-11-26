@@ -2,6 +2,9 @@ package com.filedrop.android
 
 import android.Manifest
 import android.app.Application
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -42,6 +45,7 @@ import com.filedrop.android.ui.Header
 import com.filedrop.android.ui.PeerGrid
 import com.filedrop.android.ui.SectionLabel
 import com.filedrop.android.ui.StatusLine
+import com.filedrop.android.ui.WebServerPanel
 
 class FileDropApplication : Application() {
     override fun onCreate() {
@@ -88,6 +92,10 @@ private fun MainScreen() {
     val note by FileDrop.note.collectAsStateWithLifecycle()
     val searching by FileDrop.searching.collectAsStateWithLifecycle()
     val background by FileDrop.receiveInBackground.collectAsStateWithLifecycle()
+    val hidden by FileDrop.hidden.collectAsStateWithLifecycle()
+    val webUrl by FileDrop.webUrl.collectAsStateWithLifecycle()
+    val webClients by FileDrop.webClients.collectAsStateWithLifecycle()
+    val webRequests by FileDrop.webRequests.collectAsStateWithLifecycle()
 
     val selected = peers.firstOrNull { it.id == selectedId }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -99,7 +107,8 @@ private fun MainScreen() {
             Modifier.safeDrawingPadding().verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Header("FileDrop", FileDrop.deviceName, onRefresh = FileDrop::refresh)
+            Header("FileDrop", if (hidden) "Đang tạm ẩn · không nhận file" else FileDrop.deviceName,
+                   onRefresh = FileDrop::refresh, warning = hidden)
             SectionLabel("Thiết bị trong mạng")
             PeerGrid(peers, selectedId, searching, onSelect = FileDrop::select)
             ActionZone(
@@ -122,6 +131,38 @@ private fun MainScreen() {
             HorizontalDivider()
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
+                    Text("Máy chủ nhận file qua trình duyệt", fontSize = 14.sp)
+                    Text("Máy khác cùng mạng không cần cài app: mở địa chỉ bằng trình duyệt để gửi file cho bạn",
+                         fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
+                }
+                Switch(checked = webUrl != null, onCheckedChange = FileDrop::setWebServer)
+            }
+            webUrl?.let { url ->
+                WebServerPanel(
+                    url = url,
+                    clients = webClients,
+                    onCopy = {
+                        context.getSystemService(ClipboardManager::class.java)
+                            .setPrimaryClip(ClipData.newPlainText("FileDrop", url))
+                        FileDrop.showNote("Đã chép địa chỉ", isError = false)
+                    },
+                    onShare = {
+                        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, url)
+                        context.startActivity(Intent.createChooser(send, "Chia sẻ địa chỉ máy chủ"))
+                    },
+                    onDisconnect = FileDrop::disconnectWeb,
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Tạm ẩn — không nhận file", fontSize = 14.sp)
+                    Text("Máy khác không thấy máy này; bạn vẫn gửi file đi được", fontSize = 12.sp,
+                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
+                }
+                Switch(checked = hidden, onCheckedChange = FileDrop::setHidden)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
                     Text("Nhận file khi chạy nền", fontSize = 14.sp)
                     Text("Giữ FileDrop hiển thị với các máy khác khi đóng app", fontSize = 12.sp,
                          color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
@@ -129,6 +170,18 @@ private fun MainScreen() {
                 Switch(checked = background, onCheckedChange = FileDrop::setReceiveInBackground)
             }
         }
+    }
+
+    val webReq = webRequests.firstOrNull()
+    if (incoming.isEmpty() && webReq != null) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Cho phép “${webReq.name}” kết nối?") },
+            text = { Text("Máy ${webReq.ip} muốn gửi file cho bạn qua trình duyệt web. Nếu đồng ý, máy đó có thể " +
+                          "gửi file nhiều lần cho tới khi bạn ngắt kết nối hoặc tắt máy chủ.") },
+            confirmButton = { TextButton(onClick = { FileDrop.respondWeb(webReq.id, true) }) { Text("Chấp nhận") } },
+            dismissButton = { TextButton(onClick = { FileDrop.respondWeb(webReq.id, false) }) { Text("Từ chối") } },
+        )
     }
 
     incoming.firstOrNull()?.let { req ->

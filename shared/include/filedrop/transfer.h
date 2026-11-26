@@ -12,6 +12,7 @@
 #include <atomic>
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -42,6 +43,22 @@ struct TransferOutcome {
     std::string error;
     uint64_t bytes = 0;
     std::vector<std::string> savedPaths;  // (máy nhận) các file/thư mục cấp cao nhất đã lưu
+};
+
+// Chọn nơi lưu an toàn trong destDir cho đường dẫn tương đối nhận từ mạng: bỏ "..", ký tự không hợp lệ,
+// trùng tên thì thêm " (1)"; các file chung thư mục gốc (vd. "Ảnh/a.jpg", "Ảnh/b.jpg") được gom vào cùng 1 thư mục.
+class SaveLocator {
+public:
+    explicit SaveLocator(std::string destDir) : dest_(std::move(destDir)) {}
+    // Đường dẫn tuyệt đối (UTF-8) để ghi file; thư mục cha đã được tạo sẵn.
+    std::string resolve(const std::string& relPath);
+    // Các file/thư mục cấp cao nhất đã tạo, theo thứ tự.
+    const std::vector<std::string>& topLevelPaths() const { return top_; }
+
+private:
+    std::string dest_;
+    std::map<std::string, std::string> dirs_;  // tên thư mục gốc gửi sang -> thư mục đã tạo
+    std::vector<std::string> top_;
 };
 
 using ProgressFn = std::function<void(uint64_t done, uint64_t total)>;

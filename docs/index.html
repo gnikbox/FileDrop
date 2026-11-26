@@ -1,0 +1,1290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FileDrop Docs</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Be+Vietnam+Pro:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky toolbar (brand · search · language · theme) over a two-column shell — section index on the left, a 760px reading column on the right. */
+:root {
+  --bg: #f6f8fb;
+  --surface: #ffffff;
+  --sunken: #eef2f8;
+  --fg: #141a24;
+  --muted: #5a6577;
+  --line: #dde3ec;
+  --accent: #0a84ff;
+  --accent-ink: #0063cc;
+  --accent-soft: rgba(10, 132, 255, 0.12);
+  --warn: #b45f00;
+  --warn-soft: rgba(255, 149, 0, 0.14);
+  --mark: rgba(255, 196, 0, 0.45);
+  --code-bg: #0f1724;
+  --code-fg: #dce6f5;
+  --code-muted: #7f8ea6;
+  --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Be Vietnam Pro", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Consolas, monospace;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1219; --surface: #141b25; --sunken: #19222f; --fg: #e7edf6; --muted: #98a4b8; --line: #263142;
+    --accent: #3d9dff; --accent-ink: #6fb6ff; --accent-soft: rgba(61, 157, 255, 0.16);
+    --warn: #ffb14a; --warn-soft: rgba(255, 149, 0, 0.16); --mark: rgba(255, 196, 0, 0.32);
+    --code-bg: #0a0f16; --code-fg: #dce6f5; --code-muted: #7f8ea6;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1219; --surface: #141b25; --sunken: #19222f; --fg: #e7edf6; --muted: #98a4b8; --line: #263142;
+  --accent: #3d9dff; --accent-ink: #6fb6ff; --accent-soft: rgba(61, 157, 255, 0.16);
+  --warn: #ffb14a; --warn-soft: rgba(255, 149, 0, 0.16); --mark: rgba(255, 196, 0, 0.32);
+  --code-bg: #0a0f16; --code-fg: #dce6f5; --code-muted: #7f8ea6;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 15.5px; line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+a { color: var(--accent-ink); text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+/* ---------- Toolbar ---------- */
+.bar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: saturate(1.4) blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.bar-inner {
+  max-width: 1180px; margin: 0 auto;
+  padding-block: 10px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+}
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--fg); }
+.brand svg { width: 30px; height: 30px; flex: none; }
+.brand b { font-family: var(--font-display); font-size: 18px; letter-spacing: -0.01em; }
+.brand small { color: var(--muted); font-size: 12px; font-weight: 500; }
+.search { position: relative; flex: 1 1 260px; min-width: 0; max-width: 460px; margin-left: auto; }
+.search input {
+  width: 100%; height: 38px; padding: 0 64px 0 36px;
+  border: 1px solid var(--line); border-radius: 9px; background: var(--sunken); color: var(--fg);
+  font: inherit; font-size: 14px;
+}
+.search input:focus { outline: none; border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+.search .icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--muted); }
+.search kbd {
+  position: absolute; right: 9px; top: 50%; transform: translateY(-50%);
+  font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; background: var(--surface);
+}
+.results {
+  position: absolute; left: 0; right: 0; top: calc(100% + 6px);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 18px 40px rgba(10, 20, 40, 0.18); max-height: min(70vh, 520px); overflow: auto; padding: 6px;
+}
+.results button {
+  display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--fg);
+  padding: 9px 11px; border-radius: 8px; cursor: pointer; font: inherit;
+}
+.results button:hover, .results button[aria-selected="true"] { background: var(--accent-soft); }
+.results .r-title { font-weight: 600; font-size: 14px; }
+.results .r-path { color: var(--muted); font-size: 12px; }
+.results .r-snip { color: var(--muted); font-size: 13px; display: block; margin-top: 2px; }
+.results .empty { padding: 14px; color: var(--muted); font-size: 14px; }
+mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1px; }
+
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; padding: 2px; background: var(--sunken); }
+.seg button {
+  border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600;
+  padding: 5px 10px; border-radius: 7px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
+}
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.seg svg { width: 15px; height: 15px; }
+
+/* ---------- Shell ---------- */
+.shell {
+  max-width: 1180px; margin: 0 auto;
+  padding-block: 28px 80px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 48px;
+}
+nav.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 78px); align-self: start; max-height: calc(100vh - 100px); overflow: auto; font-size: 14px; }
+.toc .group { margin-bottom: 18px; }
+.toc .group-label { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px 10px; }
+.toc a { display: block; padding: 4px 10px; border-radius: 7px; color: var(--fg); text-decoration: none; border-left: 2px solid transparent; }
+.toc a:hover { background: var(--sunken); }
+.toc a.active { color: var(--accent-ink); background: var(--accent-soft); font-weight: 600; }
+
+main { min-width: 0; max-width: 780px; }
+.hero { padding-bottom: 26px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; color: var(--accent-ink); letter-spacing: .02em; }
+h1 { font-family: var(--font-display); font-size: clamp(30px, 5vw, 42px); line-height: 1.12; letter-spacing: -0.02em; margin: 8px 0 12px; text-wrap: balance; }
+.lede { font-size: 17.5px; color: var(--muted); margin: 0; max-width: 62ch; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.chip { font-size: 12.5px; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); }
+.chip.ok::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #2fb350; margin-right: 6px; vertical-align: 1px; }
+.chip.part::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); margin-right: 6px; vertical-align: 1px; }
+.chip.plan::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--muted); margin-right: 6px; vertical-align: 0; }
+
+section.doc-sec { scroll-margin-top: 90px; padding-top: 34px; }
+h2 { font-family: var(--font-display); font-size: 26px; letter-spacing: -0.015em; margin: 0 0 6px; text-wrap: balance; }
+h2 + .sub { color: var(--muted); margin: 0 0 18px; }
+h3 { font-family: var(--font-display); font-size: 18.5px; margin: 28px 0 8px; scroll-margin-top: 90px; }
+h4 { font-size: 15px; margin: 20px 0 6px; }
+p, li { max-width: 68ch; }
+ul, ol { padding-left: 1.3em; }
+li { margin: 4px 0; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--sunken); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; }
+.kbd { font-family: var(--font-mono); font-size: 12px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 0 6px; background: var(--surface); }
+
+.code { position: relative; margin: 12px 0 18px; }
+.code pre {
+  margin: 0; background: var(--code-bg); color: var(--code-fg); border-radius: var(--radius);
+  padding: 14px 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.6;
+}
+.code pre .c { color: var(--code-muted); }
+.code .lang { position: absolute; top: 8px; right: 62px; font-family: var(--font-mono); font-size: 11px; color: var(--code-muted); }
+.code .copy {
+  position: absolute; top: 6px; right: 6px; font: inherit; font-size: 12px; font-weight: 600;
+  background: rgba(255,255,255,.08); color: var(--code-fg); border: 1px solid rgba(255,255,255,.14);
+  border-radius: 6px; padding: 3px 9px; cursor: pointer;
+}
+.code .copy:hover { background: rgba(255,255,255,.16); }
+
+.table-wrap { overflow-x: auto; margin: 12px 0 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--sunken); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+td.num { font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+
+.note { border: 1px solid var(--line); border-left: 3px solid var(--accent); background: var(--surface); border-radius: 8px; padding: 10px 14px; margin: 14px 0; }
+.note.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+.note strong:first-child { display: block; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px; }
+.note p { margin: 4px 0; }
+
+.steps { counter-reset: step; list-style: none; padding: 0; }
+.steps > li { counter-increment: step; position: relative; padding-left: 38px; margin: 12px 0; }
+.steps > li::before {
+  content: counter(step); position: absolute; left: 0; top: 0;
+  width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink);
+  font-weight: 700; font-size: 13px; display: grid; place-items: center; font-family: var(--font-display);
+}
+
+.platforms { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 16px 0; }
+.platform { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; }
+.platform b { font-family: var(--font-display); display: block; }
+.platform span { color: var(--muted); font-size: 13px; }
+
+.flow { display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px 10px; font-size: 13.5px; margin: 14px 0 18px; align-items: center; }
+.flow .who { font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.flow .msg { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-family: var(--font-mono); font-size: 12.5px; }
+.flow .arrow { color: var(--accent); font-weight: 700; text-align: center; }
+.flow .r { text-align: right; }
+
+.hit-flash { animation: flash 1.6s ease-out; }
+@keyframes flash { 0% { background: var(--mark); } 100% { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .hit-flash { animation: none; } * { scroll-behavior: auto !important; } }
+html { scroll-behavior: smooth; }
+
+footer.foot { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+
+@media (max-width: 900px) {
+  .shell { grid-template-columns: minmax(0, 1fr); gap: 0; padding-block: 0 64px; }
+  nav.toc { position: static; max-height: none; overflow-x: auto; white-space: nowrap; padding: 10px 0; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+  .toc .group { display: inline-flex; gap: 4px; margin: 0 8px 0 0; vertical-align: top; }
+  .toc .group-label, .toc .sub-link { display: none; }
+  .toc a { display: inline-block; border: 1px solid var(--line); background: var(--surface); }
+  .brand small { display: none; }
+  .search { order: 3; flex-basis: 100%; max-width: none; }
+}
+@media (max-width: 520px) {
+  .flow { grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); font-size: 12px; }
+}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-inner">
+    <a class="brand" href="#top" aria-label="FileDrop">
+      <svg viewBox="0 0 48 48" aria-hidden="true">
+        <rect x="1" y="1" width="46" height="46" rx="11" fill="#0A84FF"/>
+        <g fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" transform="translate(24 24) scale(.8) translate(-24 -24)">
+          <circle cx="24" cy="24" r="3.4" fill="#fff" stroke="none"/>
+          <path d="M16.2 31.8a11 11 0 0 1 0-15.6M31.8 16.2a11 11 0 0 1 0 15.6"/>
+          <path d="M10.6 37.4a18.9 18.9 0 0 1 0-26.8M37.4 10.6a18.9 18.9 0 0 1 0 26.8"/>
+        </g>
+      </svg>
+      <span><b>FileDrop</b> <small data-i18n="tag">Docs · v0.1.0</small></span>
+    </a>
+    <div class="search" role="search">
+      <svg class="icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="9" cy="9" r="6"/><path d="m14 14 4 4" stroke-linecap="round"/></svg>
+      <input id="q" type="search" autocomplete="off" spellcheck="false" aria-label="Search" aria-controls="results">
+      <kbd>/</kbd>
+      <div class="results" id="results" role="listbox" hidden></div>
+    </div>
+    <div class="seg" role="group" aria-label="Language">
+      <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+      <button type="button" data-lang-btn="vi" aria-pressed="false">VI</button>
+    </div>
+    <div class="seg" role="group" aria-label="Theme">
+      <button type="button" data-theme-btn="light" aria-pressed="false" title="Light"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10" cy="10" r="3.6"/><path d="M10 1.8v2.2M10 16v2.2M1.8 10H4M16 10h2.2M4.2 4.2l1.6 1.6M14.2 14.2l1.6 1.6M4.2 15.8l1.6-1.6M14.2 5.8l1.6-1.6" stroke-linecap="round"/></svg></button>
+      <button type="button" data-theme-btn="system" aria-pressed="false" title="System"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2.5" y="3.5" width="15" height="10" rx="1.6"/><path d="M7 17h6M10 13.5V17" stroke-linecap="round"/></svg></button>
+      <button type="button" data-theme-btn="dark" aria-pressed="false" title="Dark"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16.5 12.4A7 7 0 0 1 7.6 3.5a7 7 0 1 0 8.9 8.9Z" stroke-linejoin="round"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<div class="shell" id="top">
+  <nav class="toc" id="toc" aria-label="Contents"></nav>
+  <main id="main">
+
+<!-- =====================================================================  ENGLISH  -->
+<article class="doc" lang="en" data-lang="en">
+  <div class="hero">
+    <div class="eyebrow">FILEDROP/1 · UDP 45454 · TCP</div>
+    <h1>Send files between Mac, PC and Android on the same Wi-Fi</h1>
+    <p class="lede">FileDrop finds the computers and phones on your local network, lets you pick one, and sends files straight to it over TCP. Nothing goes through the internet or a server.</p>
+    <div class="chips">
+      <span class="chip ok">macOS 13+</span>
+      <span class="chip part">Windows 10/11 · tested UI, transfer not yet verified</span>
+      <span class="chip ok">Android 10+</span>
+      <span class="chip plan">iOS · planned</span>
+    </div>
+  </div>
+
+  <section class="doc-sec" id="en-overview" data-group="Using FileDrop">
+    <h2>Overview</h2>
+    <p class="sub">What FileDrop does and how a transfer flows.</p>
+    <div class="platforms">
+      <div class="platform"><b>macOS</b><span>Menu bar icon and popover. Swift / SwiftUI.</span></div>
+      <div class="platform"><b>Windows</b><span>System tray icon and popup. Win32 C++ with GDI+.</span></div>
+      <div class="platform"><b>Android</b><span>App plus Share sheet target. Kotlin / Compose.</span></div>
+      <div class="platform"><b>Shared core</b><span>C++17 engine for discovery and transfer, used by every app.</span></div>
+    </div>
+    <h3 id="en-how-transfer">How a transfer works</h3>
+    <ol class="steps">
+      <li>Each device announces itself on the network. Other devices appear in a grid: a laptop icon for Macs, a PC icon for Windows, a phone icon for Android.</li>
+      <li>You pick a device once. FileDrop remembers it as the default target.</li>
+      <li>You drop files on FileDrop (or share them on Android). The receiver is asked: <em>Accept</em> or <em>Decline</em>.</li>
+      <li>If accepted, the receiver opens a one-time TCP server with a random 16-character password. The sender connects, proves the password and streams the files.</li>
+      <li>Both sides show a circular progress ring, then a small notification when it finishes. The TCP connection is closed.</li>
+    </ol>
+  </section>
+
+  <section class="doc-sec" id="en-features" data-group="Using FileDrop">
+    <h2>Features</h2>
+    <p class="sub">Available on every platform unless noted.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Feature</th><th>Details</th><th>Platforms</th></tr></thead>
+      <tbody>
+        <tr><td>Automatic discovery</td><td>Finds devices on the same Wi-Fi within a second. Refreshes every 30 s; a device that stops answering for 95 s is removed.</td><td>All</td></tr>
+        <tr><td>Remembered target</td><td>The device you click becomes the default. If it is offline, FileDrop says so.</td><td>All</td></tr>
+        <tr><td>Drag and drop</td><td>Drop files or whole folders. Folder structure is kept on the receiver.</td><td>macOS, Windows</td></tr>
+        <tr><td>Drop screenshots and images</td><td>Drag the screenshot thumbnail (bottom-right corner), a photo from Photos, a Mail attachment or an image from a browser. FileDrop saves it to a temporary file and sends it.</td><td>macOS, Windows (Outlook attachments, browser images)</td></tr>
+        <tr><td>Drop on the menu bar icon</td><td>Dragging over the icon opens the popover; dropping on the icon sends at once.</td><td>macOS</td></tr>
+        <tr><td>Share sheet</td><td>FileDrop appears in Android's Share menu for any file, photo, video or text.</td><td>Android</td></tr>
+        <tr><td>Accept / Decline prompt</td><td>Shows the sender's name and the file name (one file) or the file count, plus total size. Requests expire after 120 s.</td><td>All</td></tr>
+        <tr><td>Circular progress</td><td>On both sides. On macOS and Windows the menu bar / tray icon turns into a progress ring too.</td><td>All</td></tr>
+        <tr><td>Cancel</td><td>Stop a transfer from either side while it runs.</td><td>All</td></tr>
+        <tr><td>Hide (do not receive)</td><td>Other devices stop seeing you and any request to you is declined automatically. You can still send.</td><td>All</td></tr>
+        <tr><td>Receive from a browser</td><td>Turn on a small web server; any device on the Wi-Fi opens its address in a browser and sends files without installing anything. You approve each device once; it stays connected until you disconnect it or turn the server off.</td><td>macOS, Windows, Android</td></tr>
+        <tr><td>Start at login</td><td>Launch FileDrop when the computer starts.</td><td>macOS, Windows</td></tr>
+        <tr><td>Receive in background</td><td>Keeps FileDrop visible to others after you close the app (foreground service).</td><td>Android</td></tr>
+        <tr><td>Name conflicts</td><td>An existing file is never overwritten: the new one is saved as <code>name (1).ext</code>.</td><td>All</td></tr>
+        <tr><td>Light and dark</td><td>Follows the system appearance.</td><td>All</td></tr>
+      </tbody>
+    </table></div>
+    <h3 id="en-save-locations">Where received files go</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Platform</th><th>Folder</th></tr></thead>
+      <tbody>
+        <tr><td>macOS</td><td><code>~/Downloads</code> · click the notification to reveal the file in Finder</td></tr>
+        <tr><td>Windows</td><td>Your <code>Downloads</code> folder · click the notification to select the file in Explorer</td></tr>
+        <tr><td>Android</td><td><code>Download/FileDrop</code> · tap the notification to open the file</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="doc-sec" id="en-use-macos" data-group="Using FileDrop">
+    <h2>Using FileDrop on macOS</h2>
+    <p class="sub">FileDrop lives in the menu bar. It has no Dock icon.</p>
+    <h3 id="en-mac-send">Send files</h3>
+    <ol class="steps">
+      <li>Click the FileDrop icon (radio waves) in the menu bar. A rounded popover opens.</li>
+      <li>Under <em>Devices on the network</em>, click the computer or phone you want to send to. It is highlighted and remembered.</li>
+      <li>Drag files from Finder onto the menu bar icon. The popover opens; drop on <em>Drop files here to send</em>, or drop directly on the icon.</li>
+      <li>Wait for the other side to accept. The ring shows progress; click <em>Cancel</em> to stop.</li>
+    </ol>
+    <h3 id="en-mac-receive">Receive files</h3>
+    <p>When someone sends to you, a dialog asks <em>Receive files from &lt;name&gt;?</em> Click <strong>Accept</strong> or <strong>Decline</strong>. Files are saved to <code>~/Downloads</code>.</p>
+    <h3 id="en-mac-options">Options in the popover</h3>
+    <ul>
+      <li><strong>Receive files via browser</strong>: see <a href="#en-web-server">Receive from a browser</a>.</li>
+      <li><strong>Hide — don't receive files</strong>: see <a href="#en-hidden">Hide mode</a>. The menu bar icon dims while hidden.</li>
+      <li><strong>Start with macOS</strong>: adds FileDrop as a Login Item. macOS may ask you to approve it in System Settings › General › Login Items.</li>
+      <li><strong>Quit</strong>: stops FileDrop. Other devices stop seeing this Mac.</li>
+      <li>Close the popover by clicking outside it, clicking the icon again, or pressing <span class="kbd">Esc</span>.</li>
+    </ul>
+    <div class="note"><strong>First launch</strong><p>macOS asks to allow FileDrop to find devices on your local network. Click <em>Allow</em>, otherwise no devices appear. You can change it later in System Settings › Privacy &amp; Security › Local Network.</p></div>
+  </section>
+
+  <section class="doc-sec" id="en-use-windows" data-group="Using FileDrop">
+    <h2>Using FileDrop on Windows</h2>
+    <p class="sub">Same layout as macOS, in the system tray.</p>
+    <ol class="steps">
+      <li>Click the blue FileDrop icon in the tray. On Windows 11 new icons start hidden behind the <span class="kbd">^</span> arrow next to the clock; drag it onto the taskbar to keep it visible.</li>
+      <li>Click a device in the grid to select it.</li>
+      <li>Drag files from File Explorer into the dashed drop zone. The popup stays open while you drag; it closes when you click elsewhere, press <span class="kbd">Alt</span>+<span class="kbd">Tab</span> or <span class="kbd">Esc</span>.</li>
+      <li>Incoming requests show a dialog with <strong>Accept</strong> and <strong>Decline</strong>. Received files go to <code>Downloads</code>.</li>
+    </ol>
+    <p>Right-click the tray icon for <em>Open FileDrop</em> and <em>Quit</em>. The popup also has <strong>Receive files via browser</strong> (see <a href="#en-web-server">Receive from a browser</a>), <strong>Hide — don't receive files</strong> (the tray icon dims) and <strong>Start with Windows</strong>.</p>
+    <div class="note warn"><strong>Network settings</strong><p>On first run, Windows Firewall asks for network access: tick <em>Private networks</em> and click <em>Allow</em>. Your Wi-Fi must be set to <em>Private</em> (Settings › Network &amp; Internet › Wi-Fi › your network). On a <em>Public</em> network Windows blocks the broadcast that FileDrop uses to find devices.</p></div>
+  </section>
+
+  <section class="doc-sec" id="en-use-android" data-group="Using FileDrop">
+    <h2>Using FileDrop on Android</h2>
+    <p class="sub">Send from any app with the Share button, or from the FileDrop app.</p>
+    <h3 id="en-android-share">Share from another app</h3>
+    <ol class="steps">
+      <li>In Gallery, Files or any app, select one or more items and tap <em>Share</em>.</li>
+      <li>Choose <strong>FileDrop</strong>. A card slides up with the devices on your network.</li>
+      <li>Tap a device. Sending starts right away; the card closes a moment after it finishes.</li>
+    </ol>
+    <h3 id="en-android-app">In the FileDrop app</h3>
+    <ul>
+      <li>Select a device, then tap <em>Choose files to send</em>.</li>
+      <li>Incoming requests appear as a dialog in the app, or as a notification with <strong>Accept</strong> / <strong>Decline</strong> buttons when the app is in the background.</li>
+      <li><strong>Hide — don't receive files</strong>: other devices stop seeing this phone.</li>
+      <li><strong>Receive files in background</strong>: keeps FileDrop running after you close the app, shown as a persistent notification. Turn it off to stop FileDrop completely when the app is closed.</li>
+    </ul>
+    <div class="note"><strong>Permissions</strong><p>Allow notifications when asked (Android 13+); otherwise you will not see incoming requests while the app is in the background.</p></div>
+  </section>
+
+  <section class="doc-sec" id="en-hidden" data-group="Using FileDrop">
+    <h2>Hide mode</h2>
+    <p class="sub">Stay on the network without receiving anything.</p>
+    <ul>
+      <li>When you turn it on, FileDrop tells other devices it is leaving, so you disappear from their grids immediately.</li>
+      <li>You still see other devices and can send files to them.</li>
+      <li>If a device still tries to send to you, the request is declined automatically. You are not interrupted; the sender sees <em>&lt;name&gt; is hidden and not receiving files</em>.</li>
+      <li>The setting is remembered. The header shows <em>Hidden · not receiving</em> in orange while it is on.</li>
+    </ul>
+  </section>
+
+  <section class="doc-sec" id="en-web-server" data-group="Using FileDrop">
+    <h2>Receive from a browser</h2>
+    <p class="sub">Let a device without FileDrop send you files from any web browser.</p>
+    <ol class="steps">
+      <li>In the popover (macOS), tray popup (Windows) or main screen (Android), turn on <strong>Receive files via browser</strong>. FileDrop opens a web server on a random port and shows its address, for example <code>http://192.168.1.5:51234/</code>. Use the buttons next to it to copy or open the address.</li>
+      <li>On the other device, open that address in a browser. It must be on the same Wi-Fi. Enter a device name and tap <em>Connect</em>.</li>
+      <li>Your computer asks <em>Allow “&lt;name&gt;” to connect?</em> Click <strong>Accept</strong> or <strong>Decline</strong>.</li>
+      <li>Once accepted, the page shows a drop zone. Drop files or folders, or tap <em>Choose files</em> on a phone. Both sides show a circular progress; received files go to <code>Downloads</code> as usual.</li>
+    </ol>
+    <ul>
+      <li>The connection stays open after a transfer, so the other device can keep sending. It ends only when you click <strong>Disconnect</strong> next to that device, untick the option, or quit FileDrop. The visitor can also click <em>Disconnect</em> on the page.</li>
+      <li>Reloading the page keeps the connection; no second approval is needed.</li>
+      <li>The server is off each time FileDrop starts, and gets a new port each time you turn it on.</li>
+      <li>Hide mode does not affect it: you can stay hidden from FileDrop devices and still receive through the browser.</li>
+      <li>On Android, the address has a share button, and FileDrop keeps running after you close the app while the server is on. Connection requests also appear as a notification with Accept / Decline.</li>
+    </ul>
+    <h3 id="en-web-apps">Offer the FileDrop app to visitors</h3>
+    <p>The page also shows a <strong>Get the FileDrop app</strong> card. It detects the visitor's system (macOS, Windows, Android, iOS) and offers the matching installer, with the other platforms listed below. Downloads need no approval. The card is hidden if the host has no installers.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Host</th><th>Always offers</th><th>Extra installers from</th></tr></thead>
+      <tbody>
+        <tr><td>macOS</td><td>The running <code>FileDrop.app</code>, zipped as <code>FileDrop-macOS.zip</code> (cached, re-zipped when the app changes)</td><td><code>FileDrop.app/Contents/Resources/Packages</code> (copied from <code>build/packages</code> by <code>build.sh</code>) and <code>~/Library/Application Support/FileDrop/Packages</code></td></tr>
+        <tr><td>Windows</td><td>The running <code>FileDrop.exe</code> (statically linked, runs on its own)</td><td><code>packages\</code> next to <code>FileDrop.exe</code></td></tr>
+        <tr><td>Android</td><td>The installed APK, as <code>FileDrop-Android.apk</code></td><td><code>Android/data/com.filedrop.android/files/packages</code></td></tr>
+      </tbody>
+    </table></div>
+    <p>Extra installers are matched by file name: <code>.apk</code> → Android, <code>.exe</code>/<code>.msi</code> → Windows, <code>.dmg</code> → macOS, <code>.AppImage</code>/<code>.deb</code> → Linux, and a <code>.zip</code> whose name contains <code>mac</code>, <code>win</code> or <code>linux</code>. The folder is read again on every visit, so new files show up without restarting the server. The app's own installer wins over a folder file for the same platform.</p>
+    <div class="note warn"><strong>Security</strong><p>Traffic is plain HTTP on your local network, not encrypted. Only devices you approve can upload, each with its own random session key tied to its IP address. Turn the server off when you no longer need it. On Windows, allow FileDrop on <em>Private networks</em> when the firewall asks.</p></div>
+  </section>
+
+  <section class="doc-sec" id="en-ios" data-group="Using FileDrop">
+    <h2>iOS (planned)</h2>
+    <p class="sub">How the iPhone version will behave once it ships.</p>
+    <ul>
+      <li><strong>Sending</strong> works from the Share sheet at any time, through a Share Extension. Keep the sheet open until the transfer finishes.</li>
+      <li><strong>Receiving</strong> only works while the FileDrop app is open. iOS suspends apps in the background, so an iPhone disappears from other devices about 30 seconds after you leave the app.</li>
+      <li>To avoid Apple's multicast entitlement, the iPhone finds devices by sending a short unicast query to every address on the Wi-Fi subnet instead of a broadcast. The protocol stays the same.</li>
+    </ul>
+  </section>
+
+  <section class="doc-sec" id="en-build-overview" data-group="Building">
+    <h2>Build overview</h2>
+    <p class="sub">One CMake project for the C++ core, plus a native app per platform.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Folder</th><th>Contents</th></tr></thead>
+      <tbody>
+        <tr><td><code>shared/</code></td><td>C++17 core (<code>namespace filedrop</code>): protocol, sockets, transfer, <code>Engine</code>, C API, <code>fdcli</code> test tool and unit tests.</td></tr>
+        <tr><td><code>macOS/</code></td><td>Swift / SwiftUI menu bar app and <code>build.sh</code>.</td></tr>
+        <tr><td><code>Windows/</code></td><td>Win32 C++ tray app, resources, MinGW toolchain file.</td></tr>
+        <tr><td><code>android/</code></td><td>Gradle project: Kotlin / Compose app, JNI bridge in <code>app/src/main/cpp</code>.</td></tr>
+        <tr><td><code>tools/icon/</code></td><td>Scripts that render the app icon for every platform.</td></tr>
+        <tr><td><code>build/</code></td><td>All build output. Never commit it.</td></tr>
+      </tbody>
+    </table></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Target</th><th>Build on</th><th>Requirements</th></tr></thead>
+      <tbody>
+        <tr><td>macOS app</td><td>macOS</td><td>Xcode or Command Line Tools (Swift 5.9+), CMake 3.20+</td></tr>
+        <tr><td>Windows app</td><td>Windows</td><td>Visual Studio 2022 with <em>Desktop development with C++</em> (includes CMake)</td></tr>
+        <tr><td>Windows app (check only)</td><td>macOS / Linux</td><td>MinGW-w64 (<code>brew install mingw-w64</code>), CMake</td></tr>
+        <tr><td>Android app</td><td>macOS / Windows / Linux</td><td>JDK 17, Android SDK 36, NDK 26.1.10909125, CMake 3.22.1</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="doc-sec" id="en-build-core" data-group="Building">
+    <h2>Core library and tests</h2>
+    <p class="sub">Build and test the shared engine on its own.</p>
+    <div class="code" data-lang-label="bash"><pre>cmake -S . -B build/macOS/core -DCMAKE_BUILD_TYPE=Release
+cmake --build build/macOS/core -j
+./build/macOS/core/shared/filedrop_tests</pre></div>
+    <p>The tests run two engines on one machine and check discovery, a 3&nbsp;MB file plus a nested folder, name conflicts, sending from a file descriptor, and hide mode.</p>
+    <h3 id="en-fdcli">fdcli test tool</h3>
+    <p>A command-line peer, handy as a second device on the same computer. Give it its own <code>--id</code>.</p>
+    <div class="code" data-lang-label="bash"><pre><span class="c"># list devices for 3 seconds</span>
+./build/macOS/core/shared/fdcli --id cli --name CLI list
+<span class="c"># receive and accept everything into a folder</span>
+./build/macOS/core/shared/fdcli --id cli --name CLI --dir /tmp/in listen --yes
+<span class="c"># send to a device by name or IP</span>
+./build/macOS/core/shared/fdcli --id cli --name CLI send "My MacBook" photo.jpg
+<span class="c"># browser receive server, approve every visitor</span>
+./build/macOS/core/shared/fdcli --id cli --name CLI --dir /tmp/in web --yes --packages build/packages</pre></div>
+    <div class="note warn"><strong>macOS Local Network</strong><p>Tools started from a terminal may be blocked from the LAN by macOS's Local Network privacy setting. If <code>fdcli</code> sees nothing, allow your terminal app in System Settings › Privacy &amp; Security › Local Network.</p></div>
+  </section>
+
+  <section class="doc-sec" id="en-build-macos" data-group="Building">
+    <h2>Build for macOS</h2>
+    <p class="sub">The script builds the core with CMake, compiles the Swift sources with <code>swiftc</code>, assembles and ad-hoc signs the app bundle.</p>
+    <div class="code" data-lang-label="bash"><pre>./macOS/build.sh
+<span class="c"># debug build</span>
+CONFIG=Debug ./macOS/build.sh
+open build/macOS/FileDrop.app</pre></div>
+    <p>Output: <code>build/macOS/FileDrop.app</code>, built for the current CPU architecture, minimum macOS 13.</p>
+    <div class="note"><strong>Distribution</strong><p>The bundle is only ad-hoc signed. To give it to other people, sign it with a Developer ID certificate and notarize it, otherwise Gatekeeper blocks it.</p></div>
+  </section>
+
+  <section class="doc-sec" id="en-build-windows" data-group="Building">
+    <h2>Build for Windows</h2>
+    <p class="sub">Use Visual Studio on Windows for real builds. MinGW on a Mac is useful to check that the code compiles.</p>
+    <h3 id="en-win-cmake">Install CMake</h3>
+    <p>Visual Studio 2022's <em>Desktop development with C++</em> workload already includes CMake; use it from <em>Developer PowerShell for VS 2022</em>. Or install it separately:</p>
+    <div class="code" data-lang-label="powershell"><pre>winget install Kitware.CMake
+cmake --version   <span class="c"># needs 3.20 or newer</span></pre></div>
+    <h3 id="en-win-msvc">Build with Visual Studio 2022</h3>
+    <p>Open <em>Developer PowerShell for VS 2022</em> in the repository root (the folder with <code>CMakeLists.txt</code>):</p>
+    <div class="code" data-lang-label="powershell"><pre>cmake -S . -B build/Windows -G "Visual Studio 17 2022" -A x64
+cmake --build build/Windows --config Release</pre></div>
+    <p>Output: <code>build\Windows\bin\Release\FileDrop.exe</code>. The test tools are in <code>build\Windows\shared\Release\</code>. You can also open the folder in Visual Studio (File › Open › Folder) and run the <code>FileDrop.exe</code> target.</p>
+    <div class="note warn"><strong>"CMakeCache.txt missing"</strong><p>The configure step (<code>cmake -S . -B …</code>) did not finish. Run it first and check that it ends with <em>Build files have been written to</em>. Do not copy a <code>build/</code> folder from another computer; delete it and configure again.</p></div>
+    <h3 id="en-win-mingw">Cross-compile from macOS (MinGW)</h3>
+    <div class="code" data-lang-label="bash"><pre>cmake -S . -B build/Windows-mingw \
+  -DCMAKE_TOOLCHAIN_FILE=Windows/cmake/mingw-w64-x86_64.cmake \
+  -DCMAKE_BUILD_TYPE=Release
+cmake --build build/Windows-mingw</pre></div>
+    <p>Output: <code>build/Windows-mingw/bin/FileDrop.exe</code>, statically linked (about 16&nbsp;MB), runs on Windows 10/11 without extra DLLs.</p>
+  </section>
+
+  <section class="doc-sec" id="en-build-android" data-group="Building">
+    <h2>Build for Android</h2>
+    <p class="sub">Gradle builds the C++ core through CMake and packages it with the Kotlin app.</p>
+    <ol class="steps">
+      <li>Install Android Studio, or the SDK command-line tools with platform 36, NDK <code>26.1.10909125</code> and CMake <code>3.22.1</code>.</li>
+      <li>Point Gradle at the SDK with <code>android/local.properties</code>: <code>sdk.dir=/path/to/Android/sdk</code>.</li>
+      <li>Use JDK 17 (Android Studio's bundled JDK works).</li>
+    </ol>
+    <div class="code" data-lang-label="bash"><pre>cd android
+JAVA_HOME=/path/to/jdk-17 ./gradlew assembleDebug
+adb install -r -g app/build/outputs/apk/debug/app-debug.apk</pre></div>
+    <p>Output: <code>android/app/build/outputs/apk/debug/app-debug.apk</code> for arm64-v8a, armeabi-v7a and x86_64. Minimum Android 10 (API 29). Add <code>--offline</code> to Gradle when there is no internet.</p>
+    <div class="note warn"><strong>Xiaomi / HyperOS</strong><p>Installing over USB fails with <code>INSTALL_FAILED_USER_RESTRICTED</code> until you enable <em>Developer options › Install via USB</em> and confirm the prompt on the phone.</p></div>
+    <div class="note"><strong>Release builds</strong><p>The release build type is currently signed with the debug key. Create a release keystore before publishing to Google Play.</p></div>
+  </section>
+
+  <section class="doc-sec" id="en-build-icons" data-group="Building">
+    <h2>App icon</h2>
+    <p class="sub">One design for every platform, drawn by a script.</p>
+    <div class="code" data-lang-label="bash"><pre>OUT=build/icon
+swift tools/icon/render_icon.swift $OUT 16 20 24 32 40 48 64 128 256 512 1024
+python3 tools/icon/make_ico.py Windows/FileDrop.ico $OUT/icon_{16,20,24,32,40,48,64,256}.png</pre></div>
+    <p>The Windows <code>.ico</code> is both the <code>.exe</code> icon and the idle tray icon. For macOS, copy the PNGs into an <code>AppIcon.iconset</code> folder and run <code>iconutil -c icns</code> to produce <code>macOS/FileDrop/Resources/AppIcon.icns</code>. Sizes of 24&nbsp;px and smaller use a simplified glyph so it stays readable in the tray.</p>
+  </section>
+
+  <section class="doc-sec" id="en-protocol" data-group="Reference">
+    <h2>Protocol</h2>
+    <p class="sub">Plain-text UDP control messages, then one TCP connection per transfer.</p>
+    <h3 id="en-udp">UDP messages</h3>
+    <p>Each device listens for broadcasts on UDP port <code>45454</code> and also opens a private control port, announced in every message. Packets look like this:</p>
+    <div class="code" data-lang-label="text"><pre>FILEDROP/1 ANNOUNCE
+id=272a1a33cd1e48c8
+ip=192.168.1.203
+name=Tuyen’s MacBook Pro
+os=macos
+port=55754</pre></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Type</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>DISCOVER</code></td><td>Who is there? Broadcast; carries the sender's identity.</td></tr>
+        <tr><td><code>ANNOUNCE</code></td><td>Reply with name, IP, control port and OS.</td></tr>
+        <tr><td><code>BYE</code></td><td>Leaving the network (quit or hide).</td></tr>
+        <tr><td><code>SEND_REQUEST</code></td><td>Request id, file count, file name (single file), total size.</td></tr>
+        <tr><td><code>SEND_RESPONSE</code></td><td><code>accept=1</code> with TCP IP, port and 16-character password, or <code>accept=0</code> (with <code>reason=hidden</code> when hidden).</td></tr>
+        <tr><td><code>CANCEL</code></td><td>Cancel a pending request.</td></tr>
+      </tbody>
+    </table></div>
+    <h3 id="en-tcp">TCP transfer</h3>
+    <div class="flow" aria-label="TCP handshake">
+      <div class="who">Sender</div><div></div><div class="who r">Receiver</div>
+      <div class="msg">"FDTX" + password</div><div class="arrow">→</div><div></div>
+      <div></div><div class="arrow">←</div><div class="msg r">'A' accept · 'R' wrong password</div>
+      <div class="msg">count, total, files…</div><div class="arrow">→</div><div></div>
+      <div></div><div class="arrow">←</div><div class="msg r">'D' all received</div>
+    </div>
+    <p>Integers are big-endian. Each file is sent as path length, UTF-8 relative path, size, then data. The receiver strips <code>..</code> and invalid characters so nothing is written outside the download folder, checks free space first, and gives up after 5 wrong passwords.</p>
+    <h3 id="en-timing">Timeouts</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>What</th><th>Value</th></tr></thead>
+      <tbody>
+        <tr><td>Re-discovery interval</td><td class="num">30 s</td></tr>
+        <tr><td>Device removed after silence</td><td class="num">95 s</td></tr>
+        <tr><td>Send request expires</td><td class="num">120 s</td></tr>
+        <tr><td>Receiver waits for TCP connection</td><td class="num">60 s</td></tr>
+        <tr><td>TCP connect / handshake</td><td class="num">10 s</td></tr>
+        <tr><td>TCP read/write stall</td><td class="num">30 s</td></tr>
+      </tbody>
+    </table></div>
+    <h3 id="en-http">Browser server (HTTP)</h3>
+    <p>The page lives in <code>shared/web/index.html</code> and is embedded into the core library at build time. Every request except the page, <code>/api/info</code> and downloads carries the session key <code>s</code>, which must match the IP that asked to connect.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Request</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET /</code></td><td>The web page.</td></tr>
+        <tr><td><code>GET /api/info</code></td><td>Host name shown on the page, plus <code>apps</code>: the installers on offer (<code>platform</code>, <code>name</code>, <code>size</code>).</td></tr>
+        <tr><td><code>GET /download/&lt;platform&gt;</code></td><td>Downloads the FileDrop installer for <code>macos</code>, <code>windows</code>, <code>android</code>… No session key needed.</td></tr>
+        <tr><td><code>POST /api/hello</code></td><td>Body is the visitor's name. Returns <code>session</code> and <code>client</code>; the host is asked to approve.</td></tr>
+        <tr><td><code>GET /api/status?known=…</code></td><td>Long poll (up to 20 s) until the state differs from <code>known</code>: <code>pending</code>, <code>accepted</code>, <code>declined</code> or <code>closed</code>.</td></tr>
+        <tr><td><code>POST /api/batch?count=&amp;total=</code></td><td>Starts one transfer (one drop). Checks free space.</td></tr>
+        <tr><td><code>PUT /api/upload?b=&amp;path=</code></td><td>Raw file body with <code>Content-Length</code>. The batch completes when <code>count</code> files have arrived.</td></tr>
+        <tr><td><code>POST /api/batch/end</code></td><td>The visitor cancelled the batch.</td></tr>
+        <tr><td><code>POST /api/bye</code></td><td>The visitor disconnected.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="doc-sec" id="en-troubleshooting" data-group="Reference">
+    <h2>Troubleshooting</h2>
+    <p class="sub">Most problems come from the network or from permissions.</p>
+    <h4>No devices appear</h4>
+    <ul>
+      <li>Both devices must be on the same Wi-Fi network and subnet. Guest networks and routers with <em>AP / client isolation</em> block device-to-device traffic.</li>
+      <li>macOS: allow FileDrop under Privacy &amp; Security › Local Network.</li>
+      <li>Windows: set the Wi-Fi to <em>Private</em> and allow FileDrop in Windows Firewall for private networks.</li>
+      <li>The other device may be in <a href="#en-hidden">hide mode</a>.</li>
+      <li>Click the refresh button to search again.</li>
+    </ul>
+    <h4>The Windows app starts but nothing shows</h4>
+    <p>Look behind the <span class="kbd">^</span> arrow in the tray. If an older build is still running, end <code>FileDrop.exe</code> in Task Manager first: only one instance runs at a time.</p>
+    <h4>Transfer fails partway</h4>
+    <p>The connection stalled for more than 30 seconds, usually because a device went to sleep or left the network. Partially received files are deleted. Send again.</p>
+    <h4>Android stops receiving in the background</h4>
+    <p>Turn on <em>Receive files in background</em> and exclude FileDrop from battery optimization in the phone's settings. Some manufacturers stop background services aggressively.</p>
+  </section>
+
+  <footer class="foot">FileDrop · v0.1.0 · Core C++17 · Ports: UDP 45454 + one control port, TCP per transfer.</footer>
+</article>
+
+<!-- =====================================================================  TIẾNG VIỆT  -->
+<article class="doc" lang="vi" data-lang="vi" hidden>
+  <div class="hero">
+    <div class="eyebrow">FILEDROP/1 · UDP 45454 · TCP</div>
+    <h1>Gửi file giữa Mac, PC và Android trong cùng mạng Wi-Fi</h1>
+    <p class="lede">FileDrop tìm các máy tính và điện thoại trong mạng cục bộ, cho bạn chọn một máy rồi gửi file thẳng tới máy đó qua TCP. Không đi qua internet hay máy chủ nào.</p>
+    <div class="chips">
+      <span class="chip ok">macOS 13+</span>
+      <span class="chip part">Windows 10/11 · đã chạy giao diện, chưa kiểm tra truyền file</span>
+      <span class="chip ok">Android 10+</span>
+      <span class="chip plan">iOS · đang lên kế hoạch</span>
+    </div>
+  </div>
+
+  <section class="doc-sec" id="vi-overview" data-group="Sử dụng FileDrop">
+    <h2>Tổng quan</h2>
+    <p class="sub">FileDrop làm gì và một lần gửi file diễn ra thế nào.</p>
+    <div class="platforms">
+      <div class="platform"><b>macOS</b><span>Icon trên thanh menu và popover. Swift / SwiftUI.</span></div>
+      <div class="platform"><b>Windows</b><span>Icon ở khay hệ thống và popup. Win32 C++ với GDI+.</span></div>
+      <div class="platform"><b>Android</b><span>App và mục trong bảng Chia sẻ. Kotlin / Compose.</span></div>
+      <div class="platform"><b>Lõi dùng chung</b><span>Engine C++17 lo việc tìm máy và truyền file, mọi app đều dùng.</span></div>
+    </div>
+    <h3 id="vi-how-transfer">Cách một lần gửi file diễn ra</h3>
+    <ol class="steps">
+      <li>Mỗi máy tự báo danh tính lên mạng. Các máy khác hiện thành lưới: icon laptop cho Mac, icon PC cho Windows, icon điện thoại cho Android.</li>
+      <li>Bạn chọn máy đích một lần. FileDrop ghi nhớ máy đó làm mặc định.</li>
+      <li>Bạn thả file vào FileDrop (hoặc chia sẻ trên Android). Máy nhận được hỏi: <em>Chấp nhận</em> hay <em>Từ chối</em>.</li>
+      <li>Nếu chấp nhận, máy nhận mở một TCP server dùng một lần với mật khẩu ngẫu nhiên 16 ký tự. Máy gửi kết nối, gửi mật khẩu rồi truyền file.</li>
+      <li>Hai bên đều hiện vòng tiến trình tròn, xong thì có thông báo nhỏ. Kết nối TCP được đóng lại.</li>
+    </ol>
+  </section>
+
+  <section class="doc-sec" id="vi-features" data-group="Sử dụng FileDrop">
+    <h2>Tính năng</h2>
+    <p class="sub">Có trên mọi nền tảng, trừ khi ghi chú khác.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Tính năng</th><th>Chi tiết</th><th>Nền tảng</th></tr></thead>
+      <tbody>
+        <tr><td>Tự tìm thiết bị</td><td>Thấy các máy cùng Wi-Fi trong vòng 1 giây. Tìm lại mỗi 30 giây; máy im lặng quá 95 giây bị xoá khỏi danh sách.</td><td>Tất cả</td></tr>
+        <tr><td>Ghi nhớ máy đích</td><td>Máy bạn bấm chọn trở thành mặc định. Nếu máy đó đang tắt, FileDrop báo cho bạn.</td><td>Tất cả</td></tr>
+        <tr><td>Kéo thả</td><td>Thả file hoặc cả thư mục. Cấu trúc thư mục được giữ nguyên ở máy nhận.</td><td>macOS, Windows</td></tr>
+        <tr><td>Thả ảnh chụp màn hình, ảnh</td><td>Kéo ảnh thu nhỏ của ảnh chụp màn hình (góc dưới phải), ảnh từ Photos, tệp đính kèm Mail hoặc ảnh từ trình duyệt. FileDrop lưu ra file tạm rồi gửi.</td><td>macOS, Windows (tệp đính kèm Outlook, ảnh trình duyệt)</td></tr>
+        <tr><td>Thả lên icon thanh menu</td><td>Kéo file qua icon thì popover tự mở; thả thẳng lên icon thì gửi ngay.</td><td>macOS</td></tr>
+        <tr><td>Bảng Chia sẻ</td><td>FileDrop có trong menu Chia sẻ của Android cho mọi file, ảnh, video hay văn bản.</td><td>Android</td></tr>
+        <tr><td>Hỏi Chấp nhận / Từ chối</td><td>Hiện tên máy gửi, tên file (khi 1 file) hoặc số lượng file, kèm tổng dung lượng. Yêu cầu hết hạn sau 120 giây.</td><td>Tất cả</td></tr>
+        <tr><td>Tiến trình hình tròn</td><td>Ở cả hai bên. Trên macOS và Windows, icon thanh menu / khay cũng thành vòng tiến trình.</td><td>Tất cả</td></tr>
+        <tr><td>Hủy</td><td>Dừng việc truyền từ bất kỳ bên nào khi đang chạy.</td><td>Tất cả</td></tr>
+        <tr><td>Máy chủ nhận file qua trình duyệt</td><td>Bật một máy chủ web nhỏ; máy bất kỳ cùng Wi-Fi mở địa chỉ đó bằng trình duyệt để gửi file mà không cần cài app. Bạn duyệt mỗi máy một lần; máy đó giữ kết nối tới khi bạn ngắt hoặc tắt máy chủ.</td><td>macOS, Windows, Android</td></tr>
+        <tr><td>Tạm ẩn (không nhận file)</td><td>Máy khác không thấy bạn và mọi yêu cầu gửi tới bị tự động từ chối. Bạn vẫn gửi đi được.</td><td>Tất cả</td></tr>
+        <tr><td>Khởi động cùng hệ điều hành</td><td>Tự chạy FileDrop khi bật máy.</td><td>macOS, Windows</td></tr>
+        <tr><td>Nhận file khi chạy nền</td><td>Giữ FileDrop hiển thị với máy khác sau khi đóng app (foreground service).</td><td>Android</td></tr>
+        <tr><td>Trùng tên file</td><td>Không bao giờ ghi đè file có sẵn: file mới được lưu thành <code>tên (1).đuôi</code>.</td><td>Tất cả</td></tr>
+        <tr><td>Sáng và tối</td><td>Theo giao diện của hệ thống.</td><td>Tất cả</td></tr>
+      </tbody>
+    </table></div>
+    <h3 id="vi-save-locations">File nhận được lưu ở đâu</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Nền tảng</th><th>Thư mục</th></tr></thead>
+      <tbody>
+        <tr><td>macOS</td><td><code>~/Downloads</code> · bấm vào thông báo để mở file trong Finder</td></tr>
+        <tr><td>Windows</td><td>Thư mục <code>Downloads</code> của bạn · bấm vào thông báo để chọn file trong Explorer</td></tr>
+        <tr><td>Android</td><td><code>Download/FileDrop</code> · chạm vào thông báo để mở file</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="doc-sec" id="vi-use-macos" data-group="Sử dụng FileDrop">
+    <h2>Dùng FileDrop trên macOS</h2>
+    <p class="sub">FileDrop nằm trên thanh menu, không có icon trên Dock.</p>
+    <h3 id="vi-mac-send">Gửi file</h3>
+    <ol class="steps">
+      <li>Bấm icon FileDrop (hình sóng phát) trên thanh menu. Một popover bo tròn hiện ra.</li>
+      <li>Trong mục <em>Thiết bị trong mạng</em>, bấm vào máy tính hoặc điện thoại muốn gửi tới. Máy đó được tô sáng và ghi nhớ.</li>
+      <li>Kéo file từ Finder lên icon thanh menu. Popover tự mở; thả vào vùng <em>Thả file vào đây để gửi</em>, hoặc thả thẳng lên icon.</li>
+      <li>Chờ bên kia chấp nhận. Vòng tròn hiện tiến trình; bấm <em>Hủy</em> để dừng.</li>
+    </ol>
+    <h3 id="vi-mac-receive">Nhận file</h3>
+    <p>Khi có máy gửi tới, hộp thoại hỏi <em>Nhận file từ &lt;tên máy&gt;?</em> Bấm <strong>Chấp nhận</strong> hoặc <strong>Từ chối</strong>. File được lưu vào <code>~/Downloads</code>.</p>
+    <h3 id="vi-mac-options">Tuỳ chọn trong popover</h3>
+    <ul>
+      <li><strong>Máy chủ nhận file qua trình duyệt</strong>: xem <a href="#vi-web-server">Nhận file qua trình duyệt</a>.</li>
+      <li><strong>Tạm ẩn — không nhận file</strong>: xem <a href="#vi-hidden">Chế độ tạm ẩn</a>. Icon thanh menu mờ đi khi đang ẩn.</li>
+      <li><strong>Khởi động cùng macOS</strong>: thêm FileDrop vào Login Items. macOS có thể yêu cầu bạn duyệt trong Cài đặt hệ thống › Cài đặt chung › Mục đăng nhập.</li>
+      <li><strong>Thoát</strong>: tắt FileDrop. Các máy khác không còn thấy Mac này.</li>
+      <li>Đóng popover bằng cách bấm ra ngoài, bấm lại icon, hoặc nhấn <span class="kbd">Esc</span>.</li>
+    </ul>
+    <div class="note"><strong>Lần chạy đầu</strong><p>macOS hỏi có cho FileDrop tìm thiết bị trong mạng cục bộ không. Bấm <em>Cho phép</em>, nếu không sẽ không thấy máy nào. Có thể đổi lại trong Cài đặt hệ thống › Quyền riêng tư &amp; Bảo mật › Mạng cục bộ.</p></div>
+  </section>
+
+  <section class="doc-sec" id="vi-use-windows" data-group="Sử dụng FileDrop">
+    <h2>Dùng FileDrop trên Windows</h2>
+    <p class="sub">Bố cục giống macOS, nằm ở khay hệ thống.</p>
+    <ol class="steps">
+      <li>Bấm icon FileDrop màu xanh ở khay hệ thống. Trên Windows 11, icon mới thường bị ẩn sau mũi tên <span class="kbd">^</span> cạnh đồng hồ; kéo nó ra thanh taskbar để luôn hiện.</li>
+      <li>Bấm vào một máy trong lưới để chọn.</li>
+      <li>Kéo file từ File Explorer vào vùng thả có viền nét đứt. Popup vẫn mở trong lúc bạn kéo; popup đóng khi bạn bấm ra chỗ khác, nhấn <span class="kbd">Alt</span>+<span class="kbd">Tab</span> hoặc <span class="kbd">Esc</span>.</li>
+      <li>Yêu cầu nhận file hiện hộp thoại với nút <strong>Chấp nhận</strong> và <strong>Từ chối</strong>. File nhận được vào <code>Downloads</code>.</li>
+    </ol>
+    <p>Bấm chuột phải vào icon khay để có <em>Mở FileDrop</em> và <em>Thoát</em>. Popup cũng có <strong>Máy chủ nhận file qua trình duyệt</strong> (xem <a href="#vi-web-server">Nhận file qua trình duyệt</a>), <strong>Tạm ẩn — không nhận file</strong> (icon khay mờ đi) và <strong>Khởi động cùng Windows</strong>.</p>
+    <div class="note warn"><strong>Cài đặt mạng</strong><p>Lần chạy đầu, Windows Firewall hỏi quyền mạng: tick <em>Private networks</em> rồi bấm <em>Allow</em>. Mạng Wi-Fi phải đặt là <em>Private</em> (Settings › Network &amp; Internet › Wi-Fi › tên mạng). Với mạng <em>Public</em>, Windows chặn gói broadcast mà FileDrop dùng để tìm máy.</p></div>
+  </section>
+
+  <section class="doc-sec" id="vi-use-android" data-group="Sử dụng FileDrop">
+    <h2>Dùng FileDrop trên Android</h2>
+    <p class="sub">Gửi từ bất kỳ app nào qua nút Chia sẻ, hoặc từ app FileDrop.</p>
+    <h3 id="vi-android-share">Chia sẻ từ app khác</h3>
+    <ol class="steps">
+      <li>Trong Thư viện, Tệp hay app bất kỳ, chọn một hoặc nhiều mục rồi chạm <em>Chia sẻ</em>.</li>
+      <li>Chọn <strong>FileDrop</strong>. Một thẻ trượt lên với các máy trong mạng.</li>
+      <li>Chạm vào một máy. Việc gửi bắt đầu ngay; thẻ tự đóng ngay sau khi gửi xong.</li>
+    </ol>
+    <h3 id="vi-android-app">Trong app FileDrop</h3>
+    <ul>
+      <li>Chọn một máy, rồi chạm <em>Chọn file để gửi</em>.</li>
+      <li>Yêu cầu nhận file hiện thành hộp thoại trong app, hoặc thành thông báo có nút <strong>Chấp nhận</strong> / <strong>Từ chối</strong> khi app đang chạy nền.</li>
+      <li><strong>Tạm ẩn — không nhận file</strong>: máy khác không còn thấy điện thoại này.</li>
+      <li><strong>Nhận file khi chạy nền</strong>: giữ FileDrop chạy sau khi đóng app, có thông báo cố định. Tắt đi thì FileDrop dừng hẳn khi bạn đóng app.</li>
+    </ul>
+    <div class="note"><strong>Quyền</strong><p>Hãy cho phép thông báo khi được hỏi (Android 13+); nếu không, bạn sẽ không thấy yêu cầu nhận file khi app đang chạy nền.</p></div>
+  </section>
+
+  <section class="doc-sec" id="vi-hidden" data-group="Sử dụng FileDrop">
+    <h2>Chế độ tạm ẩn</h2>
+    <p class="sub">Vẫn ở trong mạng nhưng không nhận gì.</p>
+    <ul>
+      <li>Khi bật, FileDrop báo cho các máy khác là mình rời mạng, nên bạn biến khỏi danh sách của họ ngay.</li>
+      <li>Bạn vẫn thấy các máy khác và vẫn gửi file cho họ được.</li>
+      <li>Nếu có máy vẫn cố gửi tới, yêu cầu bị tự động từ chối. Bạn không bị làm phiền; bên gửi thấy <em>&lt;tên máy&gt; đang tạm ẩn, không nhận file</em>.</li>
+      <li>Lựa chọn này được ghi nhớ. Khi đang bật, dưới tên app hiện dòng màu cam <em>Đang tạm ẩn · không nhận file</em>.</li>
+    </ul>
+  </section>
+
+  <section class="doc-sec" id="vi-web-server" data-group="Sử dụng FileDrop">
+    <h2>Nhận file qua trình duyệt</h2>
+    <p class="sub">Cho máy chưa cài FileDrop gửi file cho bạn bằng trình duyệt web bất kỳ.</p>
+    <ol class="steps">
+      <li>Trong popover (macOS), popup khay (Windows) hoặc màn hình chính (Android), bật <strong>Máy chủ nhận file qua trình duyệt</strong>. FileDrop mở một máy chủ web trên cổng ngẫu nhiên và hiện địa chỉ, ví dụ <code>http://192.168.1.5:51234/</code>. Hai nút bên cạnh để chép hoặc mở địa chỉ.</li>
+      <li>Trên máy kia (cùng mạng Wi-Fi), mở địa chỉ đó bằng trình duyệt, nhập tên máy rồi bấm <em>Kết nối</em>.</li>
+      <li>Máy bạn hỏi <em>Cho phép “&lt;tên máy&gt;” kết nối?</em> Bấm <strong>Chấp nhận</strong> hoặc <strong>Từ chối</strong>.</li>
+      <li>Khi được chấp nhận, trang hiện vùng thả file. Thả file hoặc thư mục, hoặc chạm <em>Chọn file</em> trên điện thoại. Cả hai bên đều có tiến trình hình tròn; file nhận được lưu vào <code>Downloads</code> như thường.</li>
+    </ol>
+    <ul>
+      <li>Gửi xong kết nối vẫn giữ, máy kia gửi tiếp được. Kết nối chỉ kết thúc khi bạn bấm <strong>Ngắt</strong> cạnh máy đó, bỏ tick tuỳ chọn, hoặc thoát FileDrop. Người dùng trên trang web cũng có thể bấm <em>Ngắt kết nối</em>.</li>
+      <li>Tải lại trang không làm mất kết nối, không phải xin phép lại.</li>
+      <li>Máy chủ luôn tắt khi FileDrop khởi động, và mỗi lần bật lại dùng một cổng mới.</li>
+      <li>Chế độ tạm ẩn không ảnh hưởng: bạn có thể ẩn với các máy FileDrop mà vẫn nhận file qua trình duyệt.</li>
+      <li>Trên Android, cạnh địa chỉ có nút chia sẻ; khi máy chủ đang bật, FileDrop vẫn chạy sau khi đóng app. Yêu cầu kết nối cũng hiện thành thông báo có nút Chấp nhận / Từ chối.</li>
+    </ul>
+    <h3 id="vi-web-apps">Cho máy khách tải app FileDrop</h3>
+    <p>Trang web còn có khung <strong>Cài ứng dụng FileDrop</strong>. Trang tự nhận ra hệ điều hành của máy khách (macOS, Windows, Android, iOS) và đưa nút tải bản phù hợp, các nền tảng khác liệt kê bên dưới. Tải về không cần được duyệt. Nếu máy chủ không có bản cài nào thì khung này ẩn đi.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Máy chủ</th><th>Luôn có</th><th>Bản cài thêm lấy từ</th></tr></thead>
+      <tbody>
+        <tr><td>macOS</td><td>Chính <code>FileDrop.app</code> đang chạy, nén thành <code>FileDrop-macOS.zip</code> (lưu đệm, nén lại khi app đổi)</td><td><code>FileDrop.app/Contents/Resources/Packages</code> (<code>build.sh</code> chép từ <code>build/packages</code>) và <code>~/Library/Application Support/FileDrop/Packages</code></td></tr>
+        <tr><td>Windows</td><td>Chính <code>FileDrop.exe</code> đang chạy (liên kết tĩnh, chạy độc lập)</td><td>Thư mục <code>packages\</code> cạnh <code>FileDrop.exe</code></td></tr>
+        <tr><td>Android</td><td>APK đã cài, tên <code>FileDrop-Android.apk</code></td><td><code>Android/data/com.filedrop.android/files/packages</code></td></tr>
+      </tbody>
+    </table></div>
+    <p>Bản cài thêm được nhận theo tên file: <code>.apk</code> → Android, <code>.exe</code>/<code>.msi</code> → Windows, <code>.dmg</code> → macOS, <code>.AppImage</code>/<code>.deb</code> → Linux, và <code>.zip</code> có <code>mac</code>, <code>win</code> hoặc <code>linux</code> trong tên. Thư mục được đọc lại mỗi lần có người truy cập nên thêm file không cần bật lại máy chủ. Bản của chính app được ưu tiên hơn file trong thư mục cho cùng nền tảng.</p>
+    <div class="note warn"><strong>Bảo mật</strong><p>Dữ liệu đi bằng HTTP thường trong mạng cục bộ, không mã hoá. Chỉ máy bạn đã duyệt mới gửi được, mỗi máy có khoá phiên ngẫu nhiên riêng gắn với IP của nó. Hãy tắt máy chủ khi không dùng. Trên Windows, cho phép FileDrop trên <em>Private networks</em> khi tường lửa hỏi.</p></div>
+  </section>
+
+  <section class="doc-sec" id="vi-ios" data-group="Sử dụng FileDrop">
+    <h2>iOS (đang lên kế hoạch)</h2>
+    <p class="sub">Bản iPhone sẽ hoạt động thế nào khi ra mắt.</p>
+    <ul>
+      <li><strong>Gửi</strong> được bất cứ lúc nào từ bảng Chia sẻ, qua Share Extension. Giữ bảng chia sẻ mở cho tới khi gửi xong.</li>
+      <li><strong>Nhận</strong> chỉ khi app FileDrop đang mở. iOS tạm dừng app chạy nền, nên iPhone biến khỏi danh sách của máy khác khoảng 30 giây sau khi bạn thoát app.</li>
+      <li>Để không cần quyền multicast đặc biệt của Apple, iPhone tìm máy bằng cách gửi gói hỏi unicast tới từng địa chỉ trong mạng Wi-Fi thay cho broadcast. Giao thức giữ nguyên.</li>
+    </ul>
+  </section>
+
+  <section class="doc-sec" id="vi-build-overview" data-group="Build">
+    <h2>Tổng quan về build</h2>
+    <p class="sub">Một project CMake cho lõi C++, cộng với app native cho từng nền tảng.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Thư mục</th><th>Nội dung</th></tr></thead>
+      <tbody>
+        <tr><td><code>shared/</code></td><td>Lõi C++17 (<code>namespace filedrop</code>): giao thức, socket, truyền file, <code>Engine</code>, C API, công cụ <code>fdcli</code> và kiểm thử.</td></tr>
+        <tr><td><code>macOS/</code></td><td>App thanh menu Swift / SwiftUI và <code>build.sh</code>.</td></tr>
+        <tr><td><code>Windows/</code></td><td>App khay hệ thống Win32 C++, tài nguyên, file toolchain MinGW.</td></tr>
+        <tr><td><code>android/</code></td><td>Project Gradle: app Kotlin / Compose, cầu nối JNI ở <code>app/src/main/cpp</code>.</td></tr>
+        <tr><td><code>tools/icon/</code></td><td>Script vẽ icon app cho mọi nền tảng.</td></tr>
+        <tr><td><code>build/</code></td><td>Toàn bộ sản phẩm build. Không commit thư mục này.</td></tr>
+      </tbody>
+    </table></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Sản phẩm</th><th>Build trên</th><th>Yêu cầu</th></tr></thead>
+      <tbody>
+        <tr><td>App macOS</td><td>macOS</td><td>Xcode hoặc Command Line Tools (Swift 5.9+), CMake 3.20+</td></tr>
+        <tr><td>App Windows</td><td>Windows</td><td>Visual Studio 2022 với workload <em>Desktop development with C++</em> (có sẵn CMake)</td></tr>
+        <tr><td>App Windows (chỉ kiểm tra)</td><td>macOS / Linux</td><td>MinGW-w64 (<code>brew install mingw-w64</code>), CMake</td></tr>
+        <tr><td>App Android</td><td>macOS / Windows / Linux</td><td>JDK 17, Android SDK 36, NDK 26.1.10909125, CMake 3.22.1</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="doc-sec" id="vi-build-core" data-group="Build">
+    <h2>Thư viện lõi và kiểm thử</h2>
+    <p class="sub">Build và kiểm thử riêng engine dùng chung.</p>
+    <div class="code" data-lang-label="bash"><pre>cmake -S . -B build/macOS/core -DCMAKE_BUILD_TYPE=Release
+cmake --build build/macOS/core -j
+./build/macOS/core/shared/filedrop_tests</pre></div>
+    <p>Bộ kiểm thử chạy 2 engine trên cùng một máy và kiểm tra: tìm thấy nhau, gửi file 3&nbsp;MB cùng một thư mục lồng nhau, xử lý trùng tên, gửi từ file descriptor và chế độ tạm ẩn.</p>
+    <h3 id="vi-fdcli">Công cụ fdcli</h3>
+    <p>Một máy ảo dạng dòng lệnh, tiện đóng vai máy thứ hai trên cùng máy tính. Hãy đặt <code>--id</code> riêng cho nó.</p>
+    <div class="code" data-lang-label="bash"><pre><span class="c"># liệt kê thiết bị trong 3 giây</span>
+./build/macOS/core/shared/fdcli --id cli --name CLI list
+<span class="c"># nhận và tự chấp nhận mọi file vào một thư mục</span>
+./build/macOS/core/shared/fdcli --id cli --name CLI --dir /tmp/in listen --yes
+<span class="c"># gửi tới máy theo tên hoặc IP</span>
+./build/macOS/core/shared/fdcli --id cli --name CLI send "My MacBook" photo.jpg
+<span class="c"># máy chủ nhận file qua trình duyệt, tự đồng ý mọi máy</span>
+./build/macOS/core/shared/fdcli --id cli --name CLI --dir /tmp/in web --yes --packages build/packages</pre></div>
+    <div class="note warn"><strong>Mạng cục bộ trên macOS</strong><p>Công cụ chạy từ terminal có thể bị chặn truy cập mạng LAN bởi quyền Mạng cục bộ của macOS. Nếu <code>fdcli</code> không thấy gì, hãy cho phép app terminal trong Cài đặt hệ thống › Quyền riêng tư &amp; Bảo mật › Mạng cục bộ.</p></div>
+  </section>
+
+  <section class="doc-sec" id="vi-build-macos" data-group="Build">
+    <h2>Build cho macOS</h2>
+    <p class="sub">Script build lõi bằng CMake, biên dịch mã Swift bằng <code>swiftc</code>, đóng gói app và ký ad-hoc.</p>
+    <div class="code" data-lang-label="bash"><pre>./macOS/build.sh
+<span class="c"># bản debug</span>
+CONFIG=Debug ./macOS/build.sh
+open build/macOS/FileDrop.app</pre></div>
+    <p>Kết quả: <code>build/macOS/FileDrop.app</code>, build cho kiến trúc CPU hiện tại, yêu cầu tối thiểu macOS 13.</p>
+    <div class="note"><strong>Phát hành</strong><p>App mới chỉ ký ad-hoc. Muốn đưa cho người khác dùng, cần ký bằng chứng chỉ Developer ID và notarize, nếu không Gatekeeper sẽ chặn.</p></div>
+  </section>
+
+  <section class="doc-sec" id="vi-build-windows" data-group="Build">
+    <h2>Build cho Windows</h2>
+    <p class="sub">Dùng Visual Studio trên Windows cho bản chính thức. MinGW trên Mac dùng để kiểm tra mã biên dịch được.</p>
+    <h3 id="vi-win-cmake">Cài CMake</h3>
+    <p>Workload <em>Desktop development with C++</em> của Visual Studio 2022 đã có sẵn CMake; dùng nó trong <em>Developer PowerShell for VS 2022</em>. Hoặc cài riêng:</p>
+    <div class="code" data-lang-label="powershell"><pre>winget install Kitware.CMake
+cmake --version   <span class="c"># cần 3.20 trở lên</span></pre></div>
+    <h3 id="vi-win-msvc">Build bằng Visual Studio 2022</h3>
+    <p>Mở <em>Developer PowerShell for VS 2022</em> tại thư mục gốc của repo (thư mục chứa <code>CMakeLists.txt</code>):</p>
+    <div class="code" data-lang-label="powershell"><pre>cmake -S . -B build/Windows -G "Visual Studio 17 2022" -A x64
+cmake --build build/Windows --config Release</pre></div>
+    <p>Kết quả: <code>build\Windows\bin\Release\FileDrop.exe</code>. Công cụ kiểm thử nằm ở <code>build\Windows\shared\Release\</code>. Cũng có thể mở thư mục bằng Visual Studio (File › Open › Folder) và chạy target <code>FileDrop.exe</code>.</p>
+    <div class="note warn"><strong>Lỗi "CMakeCache.txt missing"</strong><p>Bước cấu hình (<code>cmake -S . -B …</code>) chưa chạy xong. Chạy bước đó trước và kiểm tra nó kết thúc bằng <em>Build files have been written to</em>. Đừng chép thư mục <code>build/</code> từ máy khác sang; hãy xoá nó rồi cấu hình lại.</p></div>
+    <h3 id="vi-win-mingw">Biên dịch chéo từ macOS (MinGW)</h3>
+    <div class="code" data-lang-label="bash"><pre>cmake -S . -B build/Windows-mingw \
+  -DCMAKE_TOOLCHAIN_FILE=Windows/cmake/mingw-w64-x86_64.cmake \
+  -DCMAKE_BUILD_TYPE=Release
+cmake --build build/Windows-mingw</pre></div>
+    <p>Kết quả: <code>build/Windows-mingw/bin/FileDrop.exe</code>, liên kết tĩnh (khoảng 16&nbsp;MB), chạy trên Windows 10/11 không cần DLL kèm theo.</p>
+  </section>
+
+  <section class="doc-sec" id="vi-build-android" data-group="Build">
+    <h2>Build cho Android</h2>
+    <p class="sub">Gradle build lõi C++ qua CMake và đóng gói cùng app Kotlin.</p>
+    <ol class="steps">
+      <li>Cài Android Studio, hoặc bộ SDK dòng lệnh với platform 36, NDK <code>26.1.10909125</code> và CMake <code>3.22.1</code>.</li>
+      <li>Khai báo đường dẫn SDK trong <code>android/local.properties</code>: <code>sdk.dir=/duong-dan/Android/sdk</code>.</li>
+      <li>Dùng JDK 17 (JDK đi kèm Android Studio dùng được).</li>
+    </ol>
+    <div class="code" data-lang-label="bash"><pre>cd android
+JAVA_HOME=/duong-dan/jdk-17 ./gradlew assembleDebug
+adb install -r -g app/build/outputs/apk/debug/app-debug.apk</pre></div>
+    <p>Kết quả: <code>android/app/build/outputs/apk/debug/app-debug.apk</code> cho arm64-v8a, armeabi-v7a và x86_64. Yêu cầu tối thiểu Android 10 (API 29). Thêm <code>--offline</code> cho Gradle khi không có internet.</p>
+    <div class="note warn"><strong>Xiaomi / HyperOS</strong><p>Cài qua USB sẽ lỗi <code>INSTALL_FAILED_USER_RESTRICTED</code> cho tới khi bạn bật <em>Tùy chọn nhà phát triển › Cài đặt qua USB</em> và xác nhận trên điện thoại.</p></div>
+    <div class="note"><strong>Bản phát hành</strong><p>Bản release hiện đang ký bằng key debug. Hãy tạo keystore phát hành trước khi đưa lên Google Play.</p></div>
+  </section>
+
+  <section class="doc-sec" id="vi-build-icons" data-group="Build">
+    <h2>Icon app</h2>
+    <p class="sub">Một thiết kế cho mọi nền tảng, vẽ bằng script.</p>
+    <div class="code" data-lang-label="bash"><pre>OUT=build/icon
+swift tools/icon/render_icon.swift $OUT 16 20 24 32 40 48 64 128 256 512 1024
+python3 tools/icon/make_ico.py Windows/FileDrop.ico $OUT/icon_{16,20,24,32,40,48,64,256}.png</pre></div>
+    <p>File <code>.ico</code> của Windows vừa là icon của <code>.exe</code> vừa là icon khay lúc rảnh. Với macOS, chép các PNG vào thư mục <code>AppIcon.iconset</code> rồi chạy <code>iconutil -c icns</code> để tạo <code>macOS/FileDrop/Resources/AppIcon.icns</code>. Các cỡ từ 24&nbsp;px trở xuống dùng hình rút gọn để vẫn rõ trên khay hệ thống.</p>
+  </section>
+
+  <section class="doc-sec" id="vi-protocol" data-group="Tham khảo">
+    <h2>Giao thức</h2>
+    <p class="sub">Gói điều khiển UDP dạng văn bản, sau đó một kết nối TCP cho mỗi lần truyền.</p>
+    <h3 id="vi-udp">Gói UDP</h3>
+    <p>Mỗi máy nghe broadcast ở cổng UDP <code>45454</code> và mở thêm một cổng điều khiển riêng, được báo trong mọi gói. Gói tin có dạng:</p>
+    <div class="code" data-lang-label="text"><pre>FILEDROP/1 ANNOUNCE
+id=272a1a33cd1e48c8
+ip=192.168.1.203
+name=Tuyen’s MacBook Pro
+os=macos
+port=55754</pre></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Loại</th><th>Ý nghĩa</th></tr></thead>
+      <tbody>
+        <tr><td><code>DISCOVER</code></td><td>Có ai không? Gửi broadcast, kèm danh tính máy hỏi.</td></tr>
+        <tr><td><code>ANNOUNCE</code></td><td>Trả lời tên máy, IP, cổng điều khiển và hệ điều hành.</td></tr>
+        <tr><td><code>BYE</code></td><td>Rời mạng (thoát app hoặc tạm ẩn).</td></tr>
+        <tr><td><code>SEND_REQUEST</code></td><td>ID yêu cầu, số file, tên file (khi 1 file), tổng dung lượng.</td></tr>
+        <tr><td><code>SEND_RESPONSE</code></td><td><code>accept=1</code> kèm IP, cổng TCP và mật khẩu 16 ký tự; hoặc <code>accept=0</code> (kèm <code>reason=hidden</code> khi đang ẩn).</td></tr>
+        <tr><td><code>CANCEL</code></td><td>Hủy một yêu cầu đang chờ.</td></tr>
+      </tbody>
+    </table></div>
+    <h3 id="vi-tcp">Truyền qua TCP</h3>
+    <div class="flow" aria-label="Bắt tay TCP">
+      <div class="who">Máy gửi</div><div></div><div class="who r">Máy nhận</div>
+      <div class="msg">"FDTX" + mật khẩu</div><div class="arrow">→</div><div></div>
+      <div></div><div class="arrow">←</div><div class="msg r">'A' chấp nhận · 'R' sai mật khẩu</div>
+      <div class="msg">số file, tổng, các file…</div><div class="arrow">→</div><div></div>
+      <div></div><div class="arrow">←</div><div class="msg r">'D' đã nhận đủ</div>
+    </div>
+    <p>Số nguyên dạng big-endian. Mỗi file gồm: độ dài đường dẫn, đường dẫn tương đối UTF-8, kích thước, rồi dữ liệu. Máy nhận loại bỏ <code>..</code> và ký tự không hợp lệ để không thể ghi ra ngoài thư mục tải về, kiểm tra dung lượng trống trước, và dừng sau 5 lần sai mật khẩu.</p>
+    <h3 id="vi-timing">Thời gian chờ</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Mục</th><th>Giá trị</th></tr></thead>
+      <tbody>
+        <tr><td>Chu kỳ tìm lại thiết bị</td><td class="num">30 giây</td></tr>
+        <tr><td>Xoá máy im lặng sau</td><td class="num">95 giây</td></tr>
+        <tr><td>Yêu cầu gửi hết hạn</td><td class="num">120 giây</td></tr>
+        <tr><td>Máy nhận chờ kết nối TCP</td><td class="num">60 giây</td></tr>
+        <tr><td>Kết nối / bắt tay TCP</td><td class="num">10 giây</td></tr>
+        <tr><td>TCP đứng yên khi đọc/ghi</td><td class="num">30 giây</td></tr>
+      </tbody>
+    </table></div>
+    <h3 id="vi-http">Máy chủ trình duyệt (HTTP)</h3>
+    <p>Trang web nằm ở <code>shared/web/index.html</code> và được nhúng vào thư viện lõi lúc build. Mọi request (trừ trang, <code>/api/info</code> và tải bản cài) đều mang khoá phiên <code>s</code>, phải khớp với IP đã xin kết nối.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Request</th><th>Ý nghĩa</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET /</code></td><td>Trang web.</td></tr>
+        <tr><td><code>GET /api/info</code></td><td>Tên máy chủ hiện trên trang, kèm <code>apps</code>: các bản cài có sẵn (<code>platform</code>, <code>name</code>, <code>size</code>).</td></tr>
+        <tr><td><code>GET /download/&lt;platform&gt;</code></td><td>Tải bản cài FileDrop cho <code>macos</code>, <code>windows</code>, <code>android</code>… Không cần khoá phiên.</td></tr>
+        <tr><td><code>POST /api/hello</code></td><td>Body là tên máy khách. Trả về <code>session</code> và <code>client</code>; máy chủ được hỏi có đồng ý không.</td></tr>
+        <tr><td><code>GET /api/status?known=…</code></td><td>Long-poll (tối đa 20 giây) tới khi trạng thái khác <code>known</code>: <code>pending</code>, <code>accepted</code>, <code>declined</code> hoặc <code>closed</code>.</td></tr>
+        <tr><td><code>POST /api/batch?count=&amp;total=</code></td><td>Bắt đầu một lượt gửi (một lần thả). Kiểm tra dung lượng trống.</td></tr>
+        <tr><td><code>PUT /api/upload?b=&amp;path=</code></td><td>Nội dung file thô, có <code>Content-Length</code>. Lượt gửi hoàn tất khi đủ <code>count</code> file.</td></tr>
+        <tr><td><code>POST /api/batch/end</code></td><td>Máy khách hủy lượt gửi.</td></tr>
+        <tr><td><code>POST /api/bye</code></td><td>Máy khách ngắt kết nối.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="doc-sec" id="vi-troubleshooting" data-group="Tham khảo">
+    <h2>Xử lý sự cố</h2>
+    <p class="sub">Phần lớn sự cố đến từ mạng hoặc quyền truy cập.</p>
+    <h4>Không thấy máy nào</h4>
+    <ul>
+      <li>Hai máy phải cùng mạng Wi-Fi và cùng dải mạng. Mạng khách và router bật <em>AP / client isolation</em> sẽ chặn các máy nói chuyện với nhau.</li>
+      <li>macOS: cho phép FileDrop trong Quyền riêng tư &amp; Bảo mật › Mạng cục bộ.</li>
+      <li>Windows: đặt Wi-Fi là <em>Private</em> và cho phép FileDrop trong Windows Firewall với mạng Private.</li>
+      <li>Máy kia có thể đang ở <a href="#vi-hidden">chế độ tạm ẩn</a>.</li>
+      <li>Bấm nút làm mới để tìm lại.</li>
+    </ul>
+    <h4>App Windows chạy nhưng không thấy gì</h4>
+    <p>Tìm sau mũi tên <span class="kbd">^</span> ở khay hệ thống. Nếu bản cũ vẫn đang chạy, tắt <code>FileDrop.exe</code> trong Task Manager trước: mỗi lúc chỉ chạy được một bản.</p>
+    <h4>Truyền file bị lỗi giữa chừng</h4>
+    <p>Kết nối đứng yên quá 30 giây, thường do một máy ngủ hoặc rời mạng. File nhận dở bị xoá. Hãy gửi lại.</p>
+    <h4>Android không nhận file khi chạy nền</h4>
+    <p>Bật <em>Nhận file khi chạy nền</em> và loại FileDrop khỏi chế độ tối ưu pin trong cài đặt điện thoại. Một số hãng tắt dịch vụ nền rất mạnh tay.</p>
+  </section>
+
+  <footer class="foot">FileDrop · v0.1.0 · Lõi C++17 · Cổng: UDP 45454 + một cổng điều khiển, TCP cho mỗi lần truyền.</footer>
+</article>
+
+  </main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var root = document.documentElement;
+  /* Cuộn tới phần tử, chừa chỗ cho thanh công cụ dính ở trên cùng. */
+  function jumpTo(el, smooth) {
+    var bar = document.querySelector(".bar");
+    var offset = (bar ? bar.getBoundingClientRect().height : 0) + 16;
+    var top = el.getBoundingClientRect().top + window.scrollY - offset;
+    window.scrollTo({ top: Math.max(0, top), behavior: smooth ? "smooth" : "instant" });
+  }
+  var store = {
+    get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  };
+  var UI = {
+    en: { search: "Search the docs", none: "No results for", copy: "Copy", copied: "Copied", tag: "Docs · v0.1.0", contents: "Contents" },
+    vi: { search: "Tìm trong tài liệu", none: "Không có kết quả cho", copy: "Chép", copied: "Đã chép", tag: "Tài liệu · v0.1.0", contents: "Mục lục" }
+  };
+
+  /* ---------- Theme ---------- */
+  function applyTheme(mode) {
+    if (mode === "light" || mode === "dark") root.setAttribute("data-theme", mode);
+    else root.removeAttribute("data-theme");
+    document.querySelectorAll("[data-theme-btn]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.dataset.themeBtn === mode));
+    });
+    store.set("fd-docs-theme", mode);
+  }
+  document.querySelectorAll("[data-theme-btn]").forEach(function (b) {
+    b.addEventListener("click", function () { applyTheme(b.dataset.themeBtn); });
+  });
+
+  /* ---------- Language ---------- */
+  var lang = "en";
+  var docs = { en: document.querySelector('.doc[data-lang="en"]'), vi: document.querySelector('.doc[data-lang="vi"]') };
+  var tocEl = document.getElementById("toc");
+  var input = document.getElementById("q");
+  var resultsEl = document.getElementById("results");
+  var index = [];
+
+  function buildToc() {
+    var groups = {};
+    var order = [];
+    docs[lang].querySelectorAll("section.doc-sec").forEach(function (sec) {
+      var g = sec.dataset.group;
+      if (!groups[g]) { groups[g] = []; order.push(g); }
+      groups[g].push(sec);
+    });
+    tocEl.innerHTML = "";
+    order.forEach(function (g) {
+      var wrap = document.createElement("div");
+      wrap.className = "group";
+      var label = document.createElement("div");
+      label.className = "group-label";
+      label.textContent = g;
+      wrap.appendChild(label);
+      groups[g].forEach(function (sec) {
+        var a = document.createElement("a");
+        a.href = "#" + sec.id;
+        a.textContent = sec.querySelector("h2").textContent;
+        a.dataset.target = sec.id;
+        wrap.appendChild(a);
+      });
+      tocEl.appendChild(wrap);
+    });
+    observeSections();
+  }
+
+  function buildIndex() {
+    index = [];
+    docs[lang].querySelectorAll("section.doc-sec").forEach(function (sec) {
+      var h2 = sec.querySelector("h2").textContent;
+      /* Split each section at its h3/h4 so results point to the closest heading. */
+      var current = { id: sec.id, title: h2, path: sec.dataset.group, text: "" };
+      Array.prototype.forEach.call(sec.children, function (el) {
+        if (el.tagName === "H3" || el.tagName === "H4") {
+          index.push(current);
+          current = { id: el.id || sec.id, el: el.id ? null : el, title: el.textContent, path: sec.dataset.group + " › " + h2, text: "" };
+        } else {
+          current.text += " " + el.textContent;
+        }
+      });
+      index.push(current);
+    });
+    index.forEach(function (e) {
+      e.text = e.text.replace(/\s+/g, " ").trim();
+      e.norm = fold(e.title + " " + e.text);
+      e.normTitle = fold(e.title);
+    });
+  }
+
+  function setLang(l) {
+    lang = l === "vi" ? "vi" : "en";
+    docs.en.hidden = lang !== "en";
+    docs.vi.hidden = lang !== "vi";
+    root.setAttribute("lang", lang);
+    document.querySelectorAll("[data-lang-btn]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.dataset.langBtn === lang));
+    });
+    input.placeholder = UI[lang].search;
+    tocEl.setAttribute("aria-label", UI[lang].contents);
+    document.querySelectorAll('[data-i18n="tag"]').forEach(function (el) { el.textContent = UI[lang].tag; });
+    document.querySelectorAll(".code .copy").forEach(function (b) { b.textContent = UI[lang].copy; });
+    store.set("fd-docs-lang", lang);
+    buildToc();
+    buildIndex();
+    if (input.value) runSearch();
+  }
+  document.querySelectorAll("[data-lang-btn]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      /* Keep the reader at the equivalent section when switching language. */
+      var active = tocEl.querySelector("a.active");
+      var suffix = active ? active.dataset.target.slice(3) : null;
+      setLang(b.dataset.langBtn);
+      if (suffix) {
+        var target = document.getElementById(lang + "-" + suffix);
+        if (target) jumpTo(target);
+      }
+    });
+  });
+
+  /* ---------- Code blocks: language label + copy ---------- */
+  document.querySelectorAll(".code").forEach(function (block) {
+    var pre = block.querySelector("pre");
+    if (block.dataset.langLabel) {
+      var tag = document.createElement("span");
+      tag.className = "lang";
+      tag.textContent = block.dataset.langLabel;
+      block.appendChild(tag);
+    }
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "copy";
+    btn.textContent = UI.en.copy;
+    btn.addEventListener("click", function () {
+      /* Copy without comment lines so the commands paste straight into a shell. */
+      var text = Array.prototype.map.call(pre.childNodes, function (n) {
+        return n.nodeType === 1 && n.classList.contains("c") ? "" : n.textContent;
+      }).join("").split("\n").map(function (l) { return l.replace(/\s+$/, ""); })
+        .filter(function (l, i, arr) { return l !== "" || (i > 0 && arr[i - 1] !== ""); }).join("\n").trim();
+      var done = function () {
+        btn.textContent = UI[lang].copied;
+        setTimeout(function () { btn.textContent = UI[lang].copy; }, 1400);
+      };
+      var fallback = function () {
+        var range = document.createRange();
+        range.selectNodeContents(pre);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, fallback);
+      } else {
+        fallback();
+      }
+    });
+    block.appendChild(btn);
+  });
+
+  /* ---------- Search ---------- */
+  function fold(s) {
+    return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d");
+  }
+  function escapeHtml(s) {
+    return s.replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; });
+  }
+  /* Highlight matches in the original text, comparing accent-folded characters one to one. */
+  function highlight(text, terms) {
+    var folded = fold(text);
+    if (folded.length !== text.length) return escapeHtml(text);
+    var marks = new Array(text.length).fill(false);
+    terms.forEach(function (t) {
+      var i = folded.indexOf(t);
+      while (i !== -1) {
+        for (var k = i; k < i + t.length; k++) marks[k] = true;
+        i = folded.indexOf(t, i + t.length);
+      }
+    });
+    var out = "", open = false;
+    for (var i = 0; i < text.length; i++) {
+      if (marks[i] && !open) { out += "<mark>"; open = true; }
+      if (!marks[i] && open) { out += "</mark>"; open = false; }
+      out += escapeHtml(text[i]);
+    }
+    return out + (open ? "</mark>" : "");
+  }
+  function snippet(text, terms) {
+    var folded = fold(text);
+    var pos = -1;
+    terms.forEach(function (t) { var p = folded.indexOf(t); if (p !== -1 && (pos === -1 || p < pos)) pos = p; });
+    if (pos === -1) return text.slice(0, 120) + (text.length > 120 ? "…" : "");
+    var start = Math.max(0, pos - 50);
+    var end = Math.min(text.length, pos + 90);
+    return (start > 0 ? "…" : "") + text.slice(start, end) + (end < text.length ? "…" : "");
+  }
+
+  var selected = -1;
+  var hits = [];
+  function runSearch() {
+    var q = fold(input.value.trim());
+    if (!q) { resultsEl.hidden = true; hits = []; return; }
+    var terms = q.split(/\s+/).filter(Boolean);
+    hits = index.map(function (e) {
+      var score = 0;
+      for (var i = 0; i < terms.length; i++) {
+        if (e.norm.indexOf(terms[i]) === -1) return null;
+        score += e.normTitle.indexOf(terms[i]) !== -1 ? 10 : 1;
+      }
+      return { e: e, score: score };
+    }).filter(Boolean).sort(function (a, b) { return b.score - a.score; }).slice(0, 12);
+
+    resultsEl.innerHTML = "";
+    if (!hits.length) {
+      var empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = UI[lang].none + " “" + input.value.trim() + "”";
+      resultsEl.appendChild(empty);
+    }
+    hits.forEach(function (h, i) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("role", "option");
+      b.innerHTML = '<span class="r-path">' + escapeHtml(h.e.path) + '</span><div class="r-title">' +
+        highlight(h.e.title, terms) + '</div><span class="r-snip">' + highlight(snippet(h.e.text, terms), terms) + "</span>";
+      b.addEventListener("mousedown", function (ev) { ev.preventDefault(); go(i); });
+      resultsEl.appendChild(b);
+    });
+    selected = hits.length ? 0 : -1;
+    paintSelection();
+    resultsEl.hidden = false;
+  }
+  function paintSelection() {
+    Array.prototype.forEach.call(resultsEl.querySelectorAll("button"), function (b, i) {
+      b.setAttribute("aria-selected", String(i === selected));
+      if (i === selected) b.scrollIntoView({ block: "nearest" });
+    });
+  }
+  function go(i) {
+    var h = hits[i];
+    if (!h) return;
+    var target = h.e.el || document.getElementById(h.e.id);
+    resultsEl.hidden = true;
+    input.blur();
+    if (!target) return;
+    jumpTo(target);
+    target.classList.remove("hit-flash");
+    void target.offsetWidth;
+    target.classList.add("hit-flash");
+  }
+  input.addEventListener("input", runSearch);
+  input.addEventListener("focus", function () { if (input.value.trim()) runSearch(); });
+  input.addEventListener("blur", function () { setTimeout(function () { resultsEl.hidden = true; }, 120); });
+  input.addEventListener("keydown", function (ev) {
+    if (resultsEl.hidden) return;
+    if (ev.key === "ArrowDown") { selected = Math.min(hits.length - 1, selected + 1); paintSelection(); ev.preventDefault(); }
+    else if (ev.key === "ArrowUp") { selected = Math.max(0, selected - 1); paintSelection(); ev.preventDefault(); }
+    else if (ev.key === "Enter") { go(selected); ev.preventDefault(); }
+    else if (ev.key === "Escape") { resultsEl.hidden = true; input.blur(); }
+  });
+  document.addEventListener("keydown", function (ev) {
+    var typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+    if ((ev.key === "/" && !typing) || ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "k")) {
+      ev.preventDefault();
+      input.focus();
+      input.select();
+    }
+  });
+
+  /* ---------- Active section in the contents ---------- */
+  var observer = null;
+  function observeSections() {
+    if (observer) observer.disconnect();
+    if (!("IntersectionObserver" in window)) return;
+    var visible = {};
+    observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) { visible[en.target.id] = en.isIntersecting ? en.boundingClientRect.top : undefined; });
+      var best = null, bestTop = Infinity;
+      Object.keys(visible).forEach(function (id) {
+        var t = visible[id];
+        if (t !== undefined && Math.abs(t) < bestTop) { best = id; bestTop = Math.abs(t); }
+      });
+      if (!best) return;
+      tocEl.querySelectorAll("a").forEach(function (a) { a.classList.toggle("active", a.dataset.target === best); });
+    }, { rootMargin: "-80px 0px -55% 0px" });
+    docs[lang].querySelectorAll("section.doc-sec").forEach(function (s) { observer.observe(s); });
+  }
+
+  document.addEventListener("click", function (ev) {
+    var a = ev.target.closest && ev.target.closest('a[href^="#"]');
+    if (!a || a.getAttribute("href") === "#top") return;
+    var el = document.getElementById(a.getAttribute("href").slice(1));
+    if (!el) return;
+    ev.preventDefault();
+    jumpTo(el, true);
+    try { history.replaceState(null, "", a.getAttribute("href")); } catch (e) {}
+  });
+
+  /* ---------- Start ---------- */
+  var savedTheme = store.get("fd-docs-theme");
+  applyTheme(savedTheme === "light" || savedTheme === "dark" ? savedTheme : "system");
+  var hashLang = /^#(en|vi)-/.exec(location.hash);
+  var savedLang = store.get("fd-docs-lang");
+  var navLang = (navigator.language || "").toLowerCase().indexOf("vi") === 0 ? "vi" : "en";
+  setLang(hashLang ? hashLang[1] : (savedLang || navLang));
+  if (location.hash) {
+    var t = document.getElementById(location.hash.slice(1));
+    if (t) jumpTo(t);
+  }
+})();
+</script>
+</body>
+</html>

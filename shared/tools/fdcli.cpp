@@ -3,6 +3,7 @@
 //   fdcli list                         liệt kê thiết bị trong mạng
 //   fdcli listen [--yes|--no]          chờ nhận file (mặc định hỏi y/n trên terminal)
 //   fdcli send <tên máy|IP> <file...>  gửi file
+//   fdcli web [--yes|--no] [--packages <thư mục>]  bật máy chủ nhận file qua trình duyệt; --packages: bản cài cho máy khách tải
 // Tuỳ chọn chung: --name <tên>  --id <id>  --dir <thư mục nhận>  --port <port discovery>
 #include <atomic>
 #include <chrono>
@@ -32,6 +33,7 @@ void usage() {
                  "  fdcli [tuỳ chọn] list\n"
                  "  fdcli [tuỳ chọn] listen [--yes|--no]\n"
                  "  fdcli [tuỳ chọn] send <tên máy|IP> <file...>\n"
+                 "  fdcli [tuỳ chọn] web [--yes|--no] [--packages <thư mục bản cài>]\n"
                  "Tuỳ chọn: --name <tên> --id <id> --dir <thư mục nhận> --port <port discovery>\n");
 }
 
@@ -52,12 +54,14 @@ int main(int argc, char** argv) {
     EngineConfig cfg;
     std::vector<std::string> args;
     std::string autoAnswer;
+    std::string packagesDir;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         if (a == "--name" && i + 1 < argc) cfg.deviceName = argv[++i];
         else if (a == "--id" && i + 1 < argc) cfg.deviceId = argv[++i];
         else if (a == "--dir" && i + 1 < argc) cfg.downloadDir = argv[++i];
         else if (a == "--port" && i + 1 < argc) cfg.discoveryPort = static_cast<uint16_t>(std::stoi(argv[++i]));
+        else if (a == "--packages" && i + 1 < argc) packagesDir = argv[++i];
         else if (a == "--yes" || a == "--no") autoAnswer = a;
         else args.push_back(a);
     }
@@ -114,6 +118,22 @@ int main(int argc, char** argv) {
         }
     };
 
+    cb.onWebClientChanged = [&](const WebClient& c) {
+        static const char* names[] = {"xin kết nối", "đã kết nối", "bị từ chối", "đã ngắt"};
+        std::printf("[web] %s (%s) %s\n", c.name.c_str(), c.ip.c_str(), names[static_cast<int>(c.state)]);
+        std::fflush(stdout);
+        if (c.state != WebClientState::Pending) return;
+        bool accept = autoAnswer == "--yes";
+        if (autoAnswer.empty()) {
+            std::printf("Cho phép kết nối? [y/N] ");
+            std::fflush(stdout);
+            std::string line;
+            std::getline(std::cin, line);
+            accept = !line.empty() && (line[0] == 'y' || line[0] == 'Y');
+        }
+        std::thread([enginePtr, id = c.id, accept] { enginePtr->respondWebClient(id, accept); }).detach();
+    };
+
     Engine engine(cfg, cb);
     enginePtr = &engine;
     std::string err;
@@ -130,6 +150,16 @@ int main(int argc, char** argv) {
     }
     if (cmd == "listen") {
         std::printf("Đang chờ nhận file... (Ctrl+C để thoát)\n");
+        for (;;) std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+    if (cmd == "web") {
+        if (!packagesDir.empty()) engine.setWebDownloads({}, {packagesDir});
+        if (!engine.startWebServer(&err)) {
+            std::fprintf(stderr, "Không bật được máy chủ: %s\n", err.c_str());
+            return 1;
+        }
+        std::printf("Máy chủ nhận file: %s  (Ctrl+C để thoát)\n", engine.webServerUrl().c_str());
+        std::fflush(stdout);
         for (;;) std::this_thread::sleep_for(std::chrono::seconds(1));
     }
     if (cmd == "send" && args.size() >= 3) {

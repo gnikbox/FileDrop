@@ -73,6 +73,7 @@ struct Bridge {
     jmethodID onTransferPhase = nullptr;
     jmethodID onProgress = nullptr;
     jmethodID onTransferFinished = nullptr;
+    jmethodID onWebClientChanged = nullptr;
     std::unique_ptr<Engine> engine;
 };
 
@@ -127,6 +128,8 @@ extern "C" JNIEXPORT jlong JNICALL Java_com_filedrop_android_core_NativeEngine_n
     b->onTransferFinished = env->GetMethodID(
         cls, "onTransferFinished",
         "(Ljava/lang/String;ILjava/lang/String;ILjava/lang/String;ILjava/lang/String;[Ljava/lang/String;)V");
+    b->onWebClientChanged = env->GetMethodID(cls, "onWebClientChanged",
+                                             "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)V");
     env->DeleteLocalRef(cls);
 
     EngineConfig cfg;
@@ -177,6 +180,13 @@ extern "C" JNIEXPORT jlong JNICALL Java_com_filedrop_android_core_NativeEngine_n
         });
     };
 
+    cb.onWebClientChanged = [b](const WebClient& c) {
+        callListener([&](JNIEnv* e) {
+            e->CallVoidMethod(b->listener, b->onWebClientChanged, toJ(e, c.id), toJ(e, c.name), toJ(e, c.ip),
+                              static_cast<jint>(c.state));
+        });
+    };
+
     b->engine = std::make_unique<Engine>(std::move(cfg), std::move(cb));
     return static_cast<jlong>(reinterpret_cast<intptr_t>(b));
 }
@@ -185,6 +195,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_filedrop_android_core_NativeEngine_na
                                                                                             jlong handle) {
     Bridge* b = bridgeOf(handle);
     if (!b) return;
+    b->engine->stopWebServer();
     b->engine->stop();
     b->engine.reset();
     env->DeleteGlobalRef(b->listener);
@@ -248,8 +259,58 @@ extern "C" JNIEXPORT void JNICALL Java_com_filedrop_android_core_NativeEngine_na
     bridgeOf(handle)->engine->cancel(fromJ(env, transferId));
 }
 
+extern "C" JNIEXPORT void JNICALL Java_com_filedrop_android_core_NativeEngine_nativeSetHidden(JNIEnv*, jobject,
+                                                                                              jlong handle,
+                                                                                              jboolean hidden) {
+    bridgeOf(handle)->engine->setHidden(hidden == JNI_TRUE);
+}
+
 extern "C" JNIEXPORT void JNICALL Java_com_filedrop_android_core_NativeEngine_nativeSetDeviceName(JNIEnv* env, jobject,
                                                                                                   jlong handle,
                                                                                                   jstring name) {
     bridgeOf(handle)->engine->setDeviceName(fromJ(env, name));
+}
+
+// ---- Máy chủ nhận file qua trình duyệt ----
+
+// Trả về địa chỉ http://...; ném IllegalStateException nếu không bật được.
+extern "C" JNIEXPORT jstring JNICALL Java_com_filedrop_android_core_NativeEngine_nativeWebStart(JNIEnv* env, jobject,
+                                                                                                jlong handle) {
+    Engine& engine = *bridgeOf(handle)->engine;
+    std::string err;
+    if (!engine.startWebServer(&err)) {
+        jclass ex = env->FindClass("java/lang/IllegalStateException");
+        env->ThrowNew(ex, err.empty() ? "Không bật được máy chủ" : err.c_str());
+        return nullptr;
+    }
+    return toJ(env, engine.webServerUrl());
+}
+
+// Bản cài cho máy khách web tải: APK của chính app + thư mục chứa thêm bản cài nền tảng khác.
+extern "C" JNIEXPORT void JNICALL Java_com_filedrop_android_core_NativeEngine_nativeWebSetDownloads(
+    JNIEnv* env, jobject, jlong handle, jstring apkPath, jstring packagesDir) {
+    std::vector<WebDownload> list;
+    std::string apk = fromJ(env, apkPath);
+    if (!apk.empty()) list.push_back({"android", apk, "FileDrop-Android.apk"});
+    std::vector<std::string> dirs;
+    std::string dir = fromJ(env, packagesDir);
+    if (!dir.empty()) dirs.push_back(dir);
+    bridgeOf(handle)->engine->setWebDownloads(std::move(list), std::move(dirs));
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_filedrop_android_core_NativeEngine_nativeWebStop(JNIEnv*, jobject,
+                                                                                            jlong handle) {
+    bridgeOf(handle)->engine->stopWebServer();
+}
+
+extern "C" JNIEXPORT jboolean JNICALL Java_com_filedrop_android_core_NativeEngine_nativeWebRespond(
+    JNIEnv* env, jobject, jlong handle, jstring clientId, jboolean accept) {
+    return bridgeOf(handle)->engine->respondWebClient(fromJ(env, clientId), accept == JNI_TRUE) ? JNI_TRUE
+                                                                                                : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_filedrop_android_core_NativeEngine_nativeWebDisconnect(JNIEnv* env, jobject,
+                                                                                                  jlong handle,
+                                                                                                  jstring clientId) {
+    bridgeOf(handle)->engine->disconnectWebClient(fromJ(env, clientId));
 }

@@ -45,6 +45,8 @@ inline constexpr const char* kSize = "size";      // tổng số byte
 inline constexpr const char* kAccept = "accept";  // 1 = chấp nhận, 0 = từ chối
 inline constexpr const char* kTcpPort = "tcp";    // port TCP server của máy nhận
 inline constexpr const char* kPassword = "pass";  // mật khẩu 16 ký tự
+inline constexpr const char* kHidden = "hidden";  // 1 = máy gửi gói đang tạm ẩn (không đưa vào danh sách)
+inline constexpr const char* kReason = "reason";  // lý do từ chối, vd. "hidden"
 }  // namespace field
 
 class Message {

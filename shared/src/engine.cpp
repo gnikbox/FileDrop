@@ -11,6 +11,7 @@
 #include "filedrop/net.h"
 #include "filedrop/transfer.h"
 #include "filedrop/util.h"
+#include "filedrop/webserver.h"
 
 namespace filedrop {
 
@@ -73,13 +74,30 @@ struct Engine::Impl {
     uint16_t msgPort = 0;
 
     std::atomic<bool> running{false};
+    std::atomic<bool> hidden{false};
     std::thread netThread;
+    std::unique_ptr<WebServer> web;
 
     Impl(EngineConfig c, EngineCallbacks callbacks) : cfg(std::move(c)), cb(std::move(callbacks)) {
+        WebServerCallbacks wcb;
+        wcb.onClientChanged = [this](const WebClient& c) {
+            if (cb.onWebClientChanged) cb.onWebClientChanged(c);
+        };
+        wcb.onTransferPhase = [this](const TransferInfo& i, TransferPhase p) {
+            if (cb.onTransferPhase) cb.onTransferPhase(i, p);
+        };
+        wcb.onProgress = [this](const TransferInfo& i, uint64_t d, uint64_t t) {
+            if (cb.onProgress) cb.onProgress(i, d, t);
+        };
+        wcb.onTransferFinished = [this](const TransferInfo& i, const TransferResult& r) {
+            if (cb.onTransferFinished) cb.onTransferFinished(i, r);
+        };
+        web = std::make_unique<WebServer>(std::move(wcb));
         if (cfg.deviceId.empty()) cfg.deviceId = randomHex(8);
         if (cfg.deviceName.empty()) cfg.deviceName = defaultDeviceName();
         if (cfg.os.empty()) cfg.os = currentOs();
         if (cfg.downloadDir.empty()) cfg.downloadDir = defaultDownloadDir();
+        hidden = cfg.hidden;
     }
 
     static void fire(std::vector<Event>& events) {
@@ -118,6 +136,7 @@ struct Engine::Impl {
         m.set(field::kOs, cfg.os);
         m.set(field::kIp, ip);
         m.setUInt(field::kPort, msgPort);
+        if (hidden) m.setInt(field::kHidden, 1);
         return m;
     }
 
@@ -160,12 +179,13 @@ struct Engine::Impl {
         std::vector<Event> events;
         switch (msg->type()) {
             case MessageType::Discover: {
-                Peer p = upsertPeer(*msg, from, events);
-                sendTo(p.ip, p.port, identity(MessageType::Announce, p.ip));
+                // Máy hỏi đang ẩn: vẫn trả lời (để nó thấy mình) nhưng không đưa nó vào danh sách.
+                Peer p = senderHidden(*msg) ? peerFrom(*msg, from) : upsertPeer(*msg, from, events);
+                if (!hidden) sendTo(p.ip, p.port, identity(MessageType::Announce, p.ip));
                 break;
             }
             case MessageType::Announce:
-                upsertPeer(*msg, from, events);
+                if (!senderHidden(*msg)) upsertPeer(*msg, from, events);
                 break;
             case MessageType::Bye: {
                 std::lock_guard<std::mutex> l(mu);
@@ -189,7 +209,9 @@ struct Engine::Impl {
         fire(events);
     }
 
-    Peer upsertPeer(const Message& msg, const net::Endpoint& from, std::vector<Event>& events) {
+    static bool senderHidden(const Message& msg) { return msg.getInt(field::kHidden) == 1; }
+
+    static Peer peerFrom(const Message& msg, const net::Endpoint& from) {
         Peer p;
         p.id = msg.get(field::kId);
         p.name = msg.get(field::kName, from.ip);
@@ -197,7 +219,11 @@ struct Engine::Impl {
         p.ip = from.ip;  // IP nguồn của gói tin là đáng tin nhất
         p.port = static_cast<uint16_t>(msg.getUInt(field::kPort, from.port));
         if (p.port == 0) p.port = from.port;
+        return p;
+    }
 
+    Peer upsertPeer(const Message& msg, const net::Endpoint& from, std::vector<Event>& events) {
+        Peer p = peerFrom(msg, from);
         std::lock_guard<std::mutex> l(mu);
         auto it = peers.find(p.id);
         bool changed = it == peers.end() || it->second.peer != p;
@@ -220,9 +246,23 @@ struct Engine::Impl {
     }
 
     void handleSendRequest(const Message& msg, const net::Endpoint& from, std::vector<Event>& events) {
-        Peer p = upsertPeer(msg, from, events);
+        Peer p = senderHidden(msg) ? peerFrom(msg, from) : upsertPeer(msg, from, events);
         const std::string req = msg.get(field::kRequest);
         if (req.empty()) return;
+
+        if (hidden) {  // Đang tạm ẩn => tự động từ chối, không hỏi người dùng.
+            {
+                std::lock_guard<std::mutex> l(mu);
+                if (seenRequests.count(req)) return;
+                rememberRequest(req);
+            }
+            Message m = identity(MessageType::SendResponse, p.ip);
+            m.set(field::kRequest, req);
+            m.setInt(field::kAccept, 0);
+            m.set(field::kReason, "hidden");
+            sendTo(p.ip, p.port, m, kControlRepeat);
+            return;
+        }
 
         TransferInfo info;
         info.id = req;
@@ -253,8 +293,10 @@ struct Engine::Impl {
             outgoing.erase(it);
         }
         if (msg.getInt(field::kAccept) != 1) {
+            const bool wasHidden = msg.get(field::kReason) == "hidden";
             events.push_back(finishedEvent(out.info, TransferStatus::Declined,
-                                           out.info.peer.name + " đã từ chối nhận file"));
+                                           out.info.peer.name + (wasHidden ? " đang tạm ẩn, không nhận file"
+                                                                           : " đã từ chối nhận file")));
             return;
         }
         const std::string ip = msg.get(field::kIp, from.ip);
@@ -412,7 +454,10 @@ struct Engine::Impl {
 Engine::Engine(EngineConfig config, EngineCallbacks callbacks)
     : impl_(std::make_unique<Impl>(std::move(config), std::move(callbacks))) {}
 
-Engine::~Engine() { stop(); }
+Engine::~Engine() {
+    stop();
+    stopWebServer();
+}
 
 bool Engine::start(std::string* error) {
     if (impl_->running) return true;
@@ -564,6 +609,7 @@ bool Engine::respond(const std::string& transferId, bool accept) {
 }
 
 void Engine::cancel(const std::string& transferId) {
+    if (impl_->web->cancel(transferId)) return;
     std::vector<Impl::Event> events;
     Peer notify;
     bool declineIncoming = false;
@@ -591,17 +637,49 @@ void Engine::cancel(const std::string& transferId) {
     Impl::fire(events);
 }
 
+void Engine::setHidden(bool hidden) {
+    if (impl_->hidden.exchange(hidden) == hidden || !impl_->running) return;
+    // Ẩn: báo BYE để các máy khác xoá mình. Hiện lại: hỏi danh tính để các máy khác thêm mình vào.
+    impl_->broadcast(impl_->identity(hidden ? MessageType::Bye : MessageType::Discover));
+}
+
+bool Engine::isHidden() const { return impl_->hidden; }
+
 void Engine::setDeviceName(const std::string& name) {
     {
         std::lock_guard<std::mutex> l(impl_->mu);
         impl_->cfg.deviceName = name.empty() ? defaultDeviceName() : name;
     }
+    impl_->web->setHostName(name);
     discover();  // thông báo tên mới cho các máy khác
 }
 
 void Engine::setDownloadDir(const std::string& dir) {
-    std::lock_guard<std::mutex> l(impl_->mu);
-    impl_->cfg.downloadDir = dir.empty() ? defaultDownloadDir() : dir;
+    {
+        std::lock_guard<std::mutex> l(impl_->mu);
+        impl_->cfg.downloadDir = dir.empty() ? defaultDownloadDir() : dir;
+    }
+    impl_->web->setDownloadDir(dir);
+}
+
+bool Engine::startWebServer(std::string* error) {
+    std::string name, dir;
+    {
+        std::lock_guard<std::mutex> l(impl_->mu);
+        name = impl_->cfg.deviceName;
+        dir = impl_->cfg.downloadDir;
+    }
+    return impl_->web->start(name, dir, error);
+}
+
+void Engine::stopWebServer() { impl_->web->stop(); }
+bool Engine::isWebServerRunning() const { return impl_->web->isRunning(); }
+std::string Engine::webServerUrl() const { return impl_->web->url(); }
+bool Engine::respondWebClient(const std::string& clientId, bool accept) { return impl_->web->respond(clientId, accept); }
+void Engine::disconnectWebClient(const std::string& clientId) { impl_->web->disconnect(clientId); }
+std::vector<WebClient> Engine::webClients() const { return impl_->web->clients(); }
+void Engine::setWebDownloads(std::vector<WebDownload> downloads, std::vector<std::string> packageDirs) {
+    impl_->web->setDownloads(std::move(downloads), std::move(packageDirs));
 }
 
 std::string Engine::deviceId() const { return impl_->cfg.deviceId; }

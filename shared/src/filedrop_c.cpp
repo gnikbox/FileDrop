@@ -97,6 +97,16 @@ fd_engine* fd_engine_create(const char* device_id, const char* device_name, cons
         h->callbacks.on_transfer_finished(h->callbacks.context, &c, &r);
     };
 
+    cb.onWebClientChanged = [h](const WebClient& client) {
+        if (!h->callbacks.on_web_client_changed) return;
+        fd_web_client c{};
+        c.id = client.id.c_str();
+        c.name = client.name.c_str();
+        c.ip = client.ip.c_str();
+        c.state = static_cast<int32_t>(client.state);
+        h->callbacks.on_web_client_changed(h->callbacks.context, &c);
+    };
+
     h->engine = std::make_unique<Engine>(std::move(cfg), std::move(cb));
     return h;
 }
@@ -143,5 +153,40 @@ void fd_engine_cancel(fd_engine* engine, const char* transfer_id) { engine->engi
 void fd_engine_set_device_name(fd_engine* engine, const char* name) { engine->engine->setDeviceName(str(name)); }
 
 void fd_engine_set_download_dir(fd_engine* engine, const char* dir) { engine->engine->setDownloadDir(str(dir)); }
+
+void fd_engine_set_hidden(fd_engine* engine, int hidden) { engine->engine->setHidden(hidden != 0); }
+
+int fd_engine_is_hidden(fd_engine* engine) { return engine->engine->isHidden() ? 1 : 0; }
+
+int fd_engine_web_start(fd_engine* engine, char* url_buf, size_t url_len, char* error_buf, size_t error_len) {
+    std::string err;
+    if (!engine->engine->startWebServer(&err)) {
+        copyTo(err, error_buf, error_len);
+        return 0;
+    }
+    copyTo(engine->engine->webServerUrl(), url_buf, url_len);
+    return 1;
+}
+
+void fd_engine_web_stop(fd_engine* engine) { engine->engine->stopWebServer(); }
+
+int fd_engine_web_is_running(fd_engine* engine) { return engine->engine->isWebServerRunning() ? 1 : 0; }
+
+int fd_engine_web_respond(fd_engine* engine, const char* client_id, int accept) {
+    return engine->engine->respondWebClient(str(client_id), accept != 0) ? 1 : 0;
+}
+
+void fd_engine_web_disconnect(fd_engine* engine, const char* client_id) {
+    engine->engine->disconnectWebClient(str(client_id));
+}
+
+void fd_engine_web_set_downloads(fd_engine* engine, const fd_web_download* items, int count,
+                                 const char* const* package_dirs, int dir_count) {
+    std::vector<WebDownload> list;
+    for (int i = 0; items && i < count; ++i) list.push_back({str(items[i].platform), str(items[i].path), str(items[i].file_name)});
+    std::vector<std::string> dirs;
+    for (int i = 0; package_dirs && i < dir_count; ++i) dirs.push_back(str(package_dirs[i]));
+    engine->engine->setWebDownloads(std::move(list), std::move(dirs));
+}
 
 }  // extern "C"

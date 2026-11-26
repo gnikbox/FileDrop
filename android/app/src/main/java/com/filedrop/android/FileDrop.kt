@@ -20,6 +20,7 @@ import com.filedrop.android.core.Peer
 import com.filedrop.android.core.Phase
 import com.filedrop.android.core.Status
 import com.filedrop.android.core.Transfer
+import com.filedrop.android.core.WebClient
 import com.filedrop.android.core.itemsDescription
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -54,6 +55,17 @@ object FileDrop : NativeEngine.Listener {
     val searching: StateFlow<Boolean> = _searching.asStateFlow()
     private val _receiveInBackground = MutableStateFlow(true)
     val receiveInBackground: StateFlow<Boolean> = _receiveInBackground.asStateFlow()
+    private val _hidden = MutableStateFlow(false)
+    /** Tạm ẩn — không hiện với máy khác, không nhận file (vẫn gửi đi được). */
+    val hidden: StateFlow<Boolean> = _hidden.asStateFlow()
+    private val _webUrl = MutableStateFlow<String?>(null)
+    /** Máy chủ nhận file qua trình duyệt: địa chỉ đang mở (null = tắt). */
+    val webUrl: StateFlow<String?> = _webUrl.asStateFlow()
+    private val _webClients = MutableStateFlow<List<WebClient>>(emptyList())
+    val webClients: StateFlow<List<WebClient>> = _webClients.asStateFlow()
+    private val _webRequests = MutableStateFlow<List<WebClient>>(emptyList())
+    /** Máy đang xin kết nối, chờ người dùng đồng ý. */
+    val webRequests: StateFlow<List<WebClient>> = _webRequests.asStateFlow()
     private val _visibleScreens = MutableStateFlow(0)
     val visibleScreens: StateFlow<Int> = _visibleScreens.asStateFlow()
 
@@ -70,6 +82,7 @@ object FileDrop : NativeEngine.Listener {
             ?.takeIf { it.isNotBlank() } ?: Build.MODEL
         _selectedPeerId.value = prefs.getString("selectedPeerId", null)
         _receiveInBackground.value = prefs.getBoolean("receiveInBackground", true)
+        _hidden.value = prefs.getBoolean("hidden", false)
     }
 
     private val deviceId: String
@@ -81,6 +94,7 @@ object FileDrop : NativeEngine.Listener {
     fun startEngine() {
         if (engine != null) return
         val e = NativeEngine(deviceId, deviceName, incomingDir.absolutePath, this)
+        e.setHidden(_hidden.value)  // trước khi start để gói đầu tiên đã ở chế độ ẩn
         val error = e.start()
         if (error != null) {
             e.destroy()
@@ -95,15 +109,22 @@ object FileDrop : NativeEngine.Listener {
         val e = engine ?: return
         engine = null
         e.destroy()
+        _webUrl.value = null
+        _webClients.value = emptyList()
+        _webRequests.value.forEach { Notifications.cancelRequest(app, it.id) }
+        _webRequests.value = emptyList()
         _peers.value = emptyList()
         _transfers.value = emptyMap()
         _incoming.value = emptyList()
     }
 
-    /** Service cần chạy khi: cho phép nhận nền, có màn hình mở, hoặc đang truyền/đang chờ trả lời. */
+    /**
+     * Service cần chạy khi: cho phép nhận nền, có màn hình mở, đang truyền/đang chờ trả lời,
+     * hoặc máy chủ web đang bật (máy khác vẫn kết nối được sau khi đóng app).
+     */
     fun serviceNeeded(): Boolean =
         _receiveInBackground.value || _visibleScreens.value > 0 || _transfers.value.isNotEmpty() ||
-            _incoming.value.isNotEmpty()
+            _incoming.value.isNotEmpty() || _webUrl.value != null
 
     fun screenStarted() = _visibleScreens.update { it + 1 }
     fun screenStopped() = _visibleScreens.update { maxOf(0, it - 1) }
@@ -126,6 +147,15 @@ object FileDrop : NativeEngine.Listener {
 
     val selectedPeer: Peer? get() = _peers.value.firstOrNull { it.id == _selectedPeerId.value }
     val rememberedPeerName: String? get() = selectedPeer?.name ?: prefs.getString("selectedPeerName", null)
+
+    fun setHidden(enabled: Boolean) {
+        if (_hidden.value == enabled) return
+        _hidden.value = enabled
+        prefs.edit().putBoolean("hidden", enabled).apply()
+        engine?.setHidden(enabled)
+        showNote(if (enabled) "Đã tạm ẩn — máy khác không thấy và không gửi file tới được"
+                 else "Đã hiện lại — sẵn sàng nhận file", isError = false)
+    }
 
     fun setReceiveInBackground(enabled: Boolean) {
         _receiveInBackground.value = enabled
@@ -192,6 +222,48 @@ object FileDrop : NativeEngine.Listener {
         engine?.cancel(id)
     }
 
+    // ------------------------------------------------------------------ Máy chủ nhận file qua trình duyệt
+
+    fun setWebServer(enabled: Boolean) {
+        val e = engine
+        if (enabled) {
+            if (_webUrl.value != null) return
+            if (e == null) {
+                showNote("FileDrop chưa sẵn sàng", isError = true)
+                return
+            }
+            // Trang web gợi ý máy khách tải FileDrop: APK của chính app + bản cài khác bỏ trong
+            // Android/data/<gói>/files/packages (vd. FileDrop-Windows.exe, FileDrop-macOS.zip).
+            runCatching { e.setWebDownloads(app.applicationInfo.sourceDir, app.getExternalFilesDir("packages")?.absolutePath) }
+            runCatching { e.startWebServer() }
+                .onSuccess {
+                    _webUrl.value = it
+                    showNote("Đã bật máy chủ nhận file — mở địa chỉ trên trình duyệt của máy khác", isError = false)
+                }
+                .onFailure { showNote("Không bật được máy chủ: ${it.message}", isError = true) }
+        } else {
+            if (_webUrl.value == null) return
+            e?.stopWebServer()
+            _webUrl.value = null
+            _webClients.value = emptyList()
+            _webRequests.value.forEach { Notifications.cancelRequest(app, it.id) }
+            _webRequests.value = emptyList()
+            showNote("Đã tắt máy chủ nhận file", isError = false)
+        }
+    }
+
+    fun respondWeb(clientId: String, accept: Boolean) {
+        val client = _webRequests.value.firstOrNull { it.id == clientId }
+        _webRequests.update { list -> list.filterNot { it.id == clientId } }
+        Notifications.cancelRequest(app, clientId)
+        val ok = engine?.respondWebClient(clientId, accept) ?: false
+        if (!ok && accept) showNote("${client?.name ?: "Máy đó"} đã rời đi", isError = true)
+    }
+
+    fun disconnectWeb(clientId: String) {
+        engine?.disconnectWebClient(clientId)
+    }
+
     // ------------------------------------------------------------------ Callback từ lõi (luồng nền)
 
     override fun onPeerUpdated(id: String, name: String, os: String, ip: String, port: Int) = main.post {
@@ -212,6 +284,24 @@ object FileDrop : NativeEngine.Listener {
         val request = IncomingRequest(id, peerName, fileCount, fileName, totalBytes)
         _incoming.update { it + request }
         Notifications.showRequest(app, request)
+    }.let {}
+
+    override fun onWebClientChanged(id: String, name: String, ip: String, state: Int) = main.post {
+        val client = WebClient(id, name, ip)
+        _webClients.update { list -> list.filterNot { it.id == id } }
+        _webRequests.update { list -> list.filterNot { it.id == id } }
+        Notifications.cancelRequest(app, id)
+        if (_webUrl.value == null) return@post  // máy chủ đã tắt
+        when (state) {
+            0 -> {
+                _webRequests.update { it + client }
+                Notifications.showWebRequest(app, client)
+            }
+            1 -> {
+                _webClients.update { it + client }
+                showNote("$name đã kết nối — có thể gửi file qua trình duyệt", isError = false)
+            }
+        }
     }.let {}
 
     override fun onTransferPhase(id: String, direction: Int, peerName: String, fileCount: Int,

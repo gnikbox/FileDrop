@@ -135,6 +135,30 @@ fs::path uniquePath(const fs::path& dir, const std::string& name) {
 
 }  // namespace
 
+std::string SaveLocator::resolve(const std::string& relPath) {
+    std::error_code ec;
+    fs::path dest = pathFromUtf8(dest_);
+    fs::create_directories(dest, ec);
+    auto parts = sanitizeComponents(relPath);
+    if (parts.empty()) parts.push_back("file");
+    if (parts.size() == 1) {
+        fs::path target = uniquePath(dest, parts[0]);
+        top_.push_back(pathToUtf8(target));
+        return pathToUtf8(target);
+    }
+    auto it = dirs_.find(parts[0]);
+    if (it == dirs_.end()) {
+        fs::path dir = uniquePath(dest, parts[0]);
+        it = dirs_.emplace(parts[0], pathToUtf8(dir)).first;
+        top_.push_back(it->second);
+    }
+    fs::path target = pathFromUtf8(it->second);
+    for (size_t k = 1; k < parts.size(); ++k) target /= pathFromUtf8(parts[k]);
+    fs::create_directories(target.parent_path(), ec);
+    if (fs::exists(target, ec)) target = uniquePath(target.parent_path(), parts.back());
+    return pathToUtf8(target);
+}
+
 #ifndef _WIN32
 FileEntry fileEntryFromFd(int fd, const std::string& name, uint64_t size) {
     FileEntry e;
@@ -323,7 +347,7 @@ TransferOutcome runReceiver(net::Socket& listener, const std::string& password, 
     throttle.report(0, total, true);
 
     TransferOutcome out;
-    std::map<std::string, fs::path> topLevelDirs;  // tên thư mục gốc gửi sang -> thư mục đã tạo
+    SaveLocator locator(destDir);
     std::vector<char> buf(kChunkSize);
     uint64_t done = 0;
 
@@ -335,25 +359,7 @@ TransferOutcome runReceiver(net::Socket& listener, const std::string& password, 
         uint64_t size = 0;
         if (!net::recvAll(conn, rel.data(), pathLen) || !recvU64(conn, size)) return fail("Mất kết nối");
 
-        auto parts = sanitizeComponents(rel);
-        if (parts.empty()) parts.push_back("file");
-
-        fs::path target;
-        if (parts.size() == 1) {
-            target = uniquePath(dest, parts[0]);
-            out.savedPaths.push_back(pathToUtf8(target));
-        } else {
-            auto it = topLevelDirs.find(parts[0]);
-            if (it == topLevelDirs.end()) {
-                fs::path dir = uniquePath(dest, parts[0]);
-                it = topLevelDirs.emplace(parts[0], dir).first;
-                out.savedPaths.push_back(pathToUtf8(dir));
-            }
-            target = it->second;
-            for (size_t k = 1; k < parts.size(); ++k) target /= pathFromUtf8(parts[k]);
-            fs::create_directories(target.parent_path(), ec);
-            if (fs::exists(target, ec)) target = uniquePath(target.parent_path(), parts.back());
-        }
+        fs::path target = pathFromUtf8(locator.resolve(rel));
 
         std::ofstream file(target, std::ios::binary | std::ios::trunc);
         if (!file) return fail("Không ghi được file: " + pathToUtf8(target));
@@ -381,6 +387,7 @@ TransferOutcome runReceiver(net::Socket& listener, const std::string& password, 
     char fin = 'D';
     net::sendAll(conn, &fin, 1);
     throttle.report(total, total, true);
+    out.savedPaths = locator.topLevelPaths();
     out.ok = true;
     out.bytes = done;
     return out;

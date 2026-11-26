@@ -16,6 +16,8 @@ class NativeEngine(deviceId: String, deviceName: String, downloadDir: String, li
         fun onProgress(id: String, direction: Int, done: Long, total: Long)
         fun onTransferFinished(id: String, direction: Int, peerName: String, fileCount: Int,
                                fileName: String, status: Int, message: String, savedPaths: Array<String>)
+        /** Máy khách web đổi trạng thái: 0 chờ duyệt, 1 đã kết nối, 2 bị từ chối, 3 đã ngắt. */
+        fun onWebClientChanged(id: String, name: String, ip: String, state: Int)
     }
 
     private var handle: Long = nativeCreate(deviceId, deviceName, downloadDir, listener)
@@ -33,6 +35,16 @@ class NativeEngine(deviceId: String, deviceName: String, downloadDir: String, li
     fun cancel(transferId: String) = nativeCancel(handle, transferId)
     fun setDeviceName(name: String) = nativeSetDeviceName(handle, name)
 
+    /** Tạm ẩn: máy khác không thấy, mọi yêu cầu gửi file tới đều tự động bị từ chối. */
+    fun setHidden(hidden: Boolean) = nativeSetHidden(handle, hidden)
+
+    /** Bật máy chủ nhận file qua trình duyệt, trả về địa chỉ. Ném IllegalStateException nếu lỗi. */
+    fun startWebServer(): String = nativeWebStart(handle)
+    fun stopWebServer() = nativeWebStop(handle)
+    fun setWebDownloads(apkPath: String?, packagesDir: String?) = nativeWebSetDownloads(handle, apkPath, packagesDir)
+    fun respondWebClient(clientId: String, accept: Boolean): Boolean = nativeWebRespond(handle, clientId, accept)
+    fun disconnectWebClient(clientId: String) = nativeWebDisconnect(handle, clientId)
+
     fun destroy() {
         if (handle != 0L) {
             nativeDestroy(handle)
@@ -49,6 +61,12 @@ class NativeEngine(deviceId: String, deviceName: String, downloadDir: String, li
     private external fun nativeRespond(handle: Long, transferId: String, accept: Boolean): Boolean
     private external fun nativeCancel(handle: Long, transferId: String)
     private external fun nativeSetDeviceName(handle: Long, name: String)
+    private external fun nativeSetHidden(handle: Long, hidden: Boolean)
+    private external fun nativeWebStart(handle: Long): String
+    private external fun nativeWebStop(handle: Long)
+    private external fun nativeWebSetDownloads(handle: Long, apkPath: String?, packagesDir: String?)
+    private external fun nativeWebRespond(handle: Long, clientId: String, accept: Boolean): Boolean
+    private external fun nativeWebDisconnect(handle: Long, clientId: String)
 
     companion object {
         init {

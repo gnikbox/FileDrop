@@ -46,3 +46,6 @@ data class IncomingRequest(
 }
 
 data class Note(val text: String, val isError: Boolean, val id: Long = System.nanoTime())
+
+/** Máy dùng trình duyệt gửi file tới "Máy chủ nhận file". */
+data class WebClient(val id: String, val name: String, val ip: String)

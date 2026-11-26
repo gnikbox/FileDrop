@@ -1,6 +1,7 @@
 #include "filedrop/net.h"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cstring>
 #include <mutex>
@@ -97,6 +98,8 @@ void pushUnique(std::vector<std::string>& list, const std::string& value) {
 struct InterfaceAddr {
     in_addr addr;
     in_addr broadcast;
+    std::string name;      // tên card (POSIX: en0...; Windows: mô tả adapter)
+    bool wireless = false;  // Windows: IF_TYPE_IEEE80211
 };
 
 std::vector<InterfaceAddr> activeInterfaces() {
@@ -123,6 +126,14 @@ std::vector<InterfaceAddr> activeInterfaces() {
             InterfaceAddr ia{};
             ia.addr = sin->sin_addr;
             ia.broadcast.s_addr = sin->sin_addr.s_addr | htonl(~mask);
+            if (a->Description) {
+                int n = ::WideCharToMultiByte(CP_UTF8, 0, a->Description, -1, nullptr, 0, nullptr, nullptr);
+                if (n > 1) {
+                    ia.name.resize(static_cast<size_t>(n - 1));
+                    ::WideCharToMultiByte(CP_UTF8, 0, a->Description, -1, ia.name.data(), n, nullptr, nullptr);
+                }
+            }
+            ia.wireless = a->IfType == IF_TYPE_IEEE80211;
             result.push_back(ia);
         }
     }
@@ -138,6 +149,7 @@ std::vector<InterfaceAddr> activeInterfaces() {
         InterfaceAddr ia{};
         ia.addr = addr->sin_addr;
         ia.broadcast.s_addr = addr->sin_addr.s_addr | ~mask->sin_addr.s_addr;
+        ia.name = ifa->ifa_name ? ifa->ifa_name : "";
         result.push_back(ia);
     }
     ::freeifaddrs(list);
@@ -274,7 +286,37 @@ std::string primaryLocalIp() {
     return ifs.empty() ? std::string("127.0.0.1") : ipToString(ifs.front().addr);
 }
 
-Socket listenTcp(uint16_t port, std::string* error) {
+std::string lanIp() {
+    // Chấm điểm từng card: ưu tiên card thật (Wi-Fi/Ethernet) hơn card ảo của VPN, máy ảo, Docker...
+    static const char* kVirtual[] = {"bridge", "vmnet", "vboxnet", "docker", "veth", "utun", "tun", "tap", "awdl",
+                                     "llw", "virtual", "vmware", "hyper-v", "vethernet", "wireguard", "vpn",
+                                     "tailscale", "zerotier", "parallels", "loopback", "bluetooth"};
+    const std::string routed = localIpFor("8.8.8.8");
+    std::string best;
+    int bestScore = -1;
+    for (const auto& ia : activeInterfaces()) {
+        std::string lower;
+        for (char c : ia.name) lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+        bool isVirtual = false;
+        for (const char* v : kVirtual) isVirtual |= lower.find(v) != std::string::npos;
+        const uint32_t ip = ntohl(ia.addr.s_addr);
+        if ((ip >> 16) == 0xA9FE) continue;  // 169.254.x.x — chưa có DHCP
+        int score = 0;
+        if (!isVirtual) score += 100;
+        if (ia.wireless || lower == "en0" || lower.rfind("wlan", 0) == 0 || lower.rfind("wlp", 0) == 0) score += 40;
+        if ((ip >> 16) == 0xC0A8) score += 20;                                   // 192.168.x.x
+        else if ((ip >> 24) == 10 || (ip >> 20) == 0xAC1) score += 10;           // 10.x, 172.16-31.x
+        const std::string text = ipToString(ia.addr);
+        if (text == routed) score += 5;
+        if (score > bestScore) {
+            bestScore = score;
+            best = text;
+        }
+    }
+    return best.empty() ? primaryLocalIp() : best;
+}
+
+Socket listenTcp(uint16_t port, std::string* error, int backlog) {
     initialize();
     socket_t s = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (s == kInvalidSocket) {
@@ -300,7 +342,7 @@ Socket listenTcp(uint16_t port, std::string* error) {
         if (error) *error = "bind(TCP): " + lastErrorString();
         return {};
     }
-    if (::listen(s, 4) != 0) {
+    if (::listen(s, backlog) != 0) {
         if (error) *error = "listen: " + lastErrorString();
         return {};
     }
@@ -415,6 +457,25 @@ bool recvAll(const Socket& sock, void* data, size_t len) {
         len -= static_cast<size_t>(n);
     }
     return true;
+}
+
+int recvSome(const Socket& sock, void* data, size_t len) {
+    for (;;) {
+        auto n = ::recv(sock.fd(), static_cast<char*>(data), static_cast<int>(std::min<size_t>(len, 1 << 20)), 0);
+#ifndef _WIN32
+        if (n < 0 && errno == EINTR) continue;
+#endif
+        return static_cast<int>(n);
+    }
+}
+
+void shutdownBoth(socket_t fd) {
+    if (fd == kInvalidSocket) return;
+#ifdef _WIN32
+    ::shutdown(fd, SD_BOTH);
+#else
+    ::shutdown(fd, SHUT_RDWR);
+#endif
 }
 
 int waitReadable(const std::vector<socket_t>& fds, int timeoutMs, std::vector<bool>* ready) {

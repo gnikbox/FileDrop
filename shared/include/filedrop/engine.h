@@ -53,6 +53,28 @@ struct TransferResult {
     std::vector<std::string> savedPaths;  // (nhận) file/thư mục đã lưu
 };
 
+// Máy khách của "Máy chủ nhận file" (trình duyệt web) — xem webserver.h.
+enum class WebClientState {
+    Pending = 0,       // đang chờ người dùng máy chủ đồng ý
+    Connected = 1,     // đã được chấp nhận, gửi file được
+    Declined = 2,      // bị từ chối
+    Disconnected = 3,  // đã ngắt (máy chủ ngắt, máy khách tự ngắt, hoặc máy chủ tắt)
+};
+
+struct WebClient {
+    std::string id;
+    std::string name;  // tên máy khách tự nhập trên trang web
+    std::string ip;
+    WebClientState state = WebClientState::Pending;
+};
+
+// Bản cài FileDrop mà máy chủ web cho máy khách tải về (trang web chọn bản hợp với HĐH của máy khách).
+struct WebDownload {
+    std::string platform;  // "macos" | "windows" | "android" | "ios" | "linux"
+    std::string path;      // file trên máy này (UTF-8)
+    std::string fileName;  // tên gợi ý khi tải, vd. "FileDrop-macOS.zip"
+};
+
 struct EngineCallbacks {
     std::function<void(const Peer&)> onPeerUpdated;
     std::function<void(const std::string& peerId)> onPeerLost;
@@ -61,6 +83,10 @@ struct EngineCallbacks {
     std::function<void(const TransferInfo&, TransferPhase)> onTransferPhase;
     std::function<void(const TransferInfo&, uint64_t done, uint64_t total)> onProgress;
     std::function<void(const TransferInfo&, const TransferResult&)> onTransferFinished;
+    // Máy khách web xin kết nối (Pending) — UI hỏi người dùng rồi gọi respondWebClient().
+    // Cũng được gọi khi máy khách được chấp nhận / bị từ chối / ngắt kết nối.
+    // Các lượt gửi file từ trình duyệt đi qua onTransferPhase/onProgress/onTransferFinished (chiều Receive, peer.os = "web").
+    std::function<void(const WebClient&)> onWebClientChanged;
 };
 
 struct EngineConfig {
@@ -69,6 +95,7 @@ struct EngineConfig {
     std::string os;          // rỗng => tự nhận diện
     std::string downloadDir; // rỗng => ~/Downloads
     uint16_t discoveryPort = kDiscoveryPort;
+    bool hidden = false;     // khởi động ở chế độ tạm ẩn
 };
 
 class Engine {
@@ -95,8 +122,26 @@ public:
     bool respond(const std::string& transferId, bool accept);
     void cancel(const std::string& transferId);
 
+    // ---- Máy chủ nhận file qua trình duyệt (HTTP, cổng ngẫu nhiên) ----
+    bool startWebServer(std::string* error = nullptr);
+    // Ngắt mọi máy khách web và đóng cổng.
+    void stopWebServer();
+    bool isWebServerRunning() const;
+    std::string webServerUrl() const;  // "http://192.168.1.5:51234/", rỗng nếu chưa bật
+    bool respondWebClient(const std::string& clientId, bool accept);
+    void disconnectWebClient(const std::string& clientId);
+    std::vector<WebClient> webClients() const;  // đang chờ duyệt + đã kết nối
+    // Các bản cài cho máy khách tải về qua GET /download/<platform> (không cần được duyệt). File thiếu thì bỏ qua.
+    // packageDirs: thư mục chứa thêm bản cài cho nền tảng khác (quét mỗi lần có yêu cầu, xem scanWebDownloads).
+    void setWebDownloads(std::vector<WebDownload> downloads, std::vector<std::string> packageDirs = {});
+
     void setDeviceName(const std::string& name);
     void setDownloadDir(const std::string& dir);
+
+    // Tạm ẩn: máy khác không thấy máy này, mọi yêu cầu gửi file tới đều bị tự động từ chối.
+    // Vẫn thấy máy khác và vẫn gửi file đi được.
+    void setHidden(bool hidden);
+    bool isHidden() const;
     std::string deviceId() const;
     std::string deviceName() const;
     uint16_t controlPort() const;

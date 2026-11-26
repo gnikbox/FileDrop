@@ -1,3 +1,15 @@
+# Trang web của "Máy chủ nhận file" được nhúng vào thư viện dưới dạng mảng byte.
+set(FILEDROP_WEB_INDEX "${CMAKE_CURRENT_SOURCE_DIR}/web/index.html")
+set(FILEDROP_WEB_INDEX_CPP "${CMAKE_CURRENT_BINARY_DIR}/generated/web_index_html.cpp")
+add_custom_command(
+    OUTPUT "${FILEDROP_WEB_INDEX_CPP}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/generated"
+    COMMAND ${CMAKE_COMMAND} -DINPUT=${FILEDROP_WEB_INDEX} -DOUTPUT=${FILEDROP_WEB_INDEX_CPP}
+            -DSYMBOL=kWebIndexHtml -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_file.cmake"
+    DEPENDS "${FILEDROP_WEB_INDEX}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_file.cmake"
+    COMMENT "Nhúng shared/web/index.html"
+    VERBATIM)
+
 add_library(filedrop_core STATIC
     src/protocol.cpp
     src/net.cpp
@@ -5,6 +17,8 @@ add_library(filedrop_core STATIC
     src/transfer.cpp
     src/engine.cpp
     src/filedrop_c.cpp
+    src/webserver.cpp
+    "${FILEDROP_WEB_INDEX_CPP}"
 )
 target_include_directories(filedrop_core PUBLIC include)
 target_compile_features(filedrop_core PUBLIC cxx_std_17)
